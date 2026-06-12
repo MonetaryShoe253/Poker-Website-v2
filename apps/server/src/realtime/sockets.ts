@@ -34,12 +34,17 @@ export interface RealtimeHandle {
   lobby: Lobby;
 }
 
+export interface HandshakeInfo {
+  auth: Record<string, unknown> | undefined;
+  headers: { cookie?: string | undefined };
+}
+
 export function attachRealtime(
   httpServer: HttpServer,
   opts: {
     timing?: TableTiming;
     scalingIntervalMs?: number;
-    resolveUser?: (auth: Record<string, unknown> | undefined) => Promise<UserCtx | null> | UserCtx | null;
+    resolveUser?: (handshake: HandshakeInfo) => Promise<UserCtx | null> | UserCtx | null;
     corsOrigin?: string | boolean;
   } = {},
 ): RealtimeHandle {
@@ -47,7 +52,8 @@ export function attachRealtime(
     cors: { origin: opts.corsOrigin ?? true, credentials: true },
   });
   const lobby = new Lobby(opts.timing ?? DEFAULT_TIMING);
-  const resolveUser = opts.resolveUser ?? devResolveUser;
+  const resolveUser =
+    opts.resolveUser ?? ((handshake: HandshakeInfo) => devResolveUser(handshake.auth));
   const contexts = new Map<string, SocketCtx>();
 
   const broadcastLobby = throttle(() => {
@@ -68,7 +74,10 @@ export function attachRealtime(
   lobby.start(opts.scalingIntervalMs ?? 10_000);
 
   io.on("connection", async (socket: Socket) => {
-    const user = await resolveUser(socket.handshake.auth as Record<string, unknown> | undefined);
+    const user = await resolveUser({
+      auth: socket.handshake.auth as Record<string, unknown> | undefined,
+      headers: { cookie: socket.handshake.headers.cookie },
+    });
     const ctx: SocketCtx = {
       user,
       watchingTableId: null,

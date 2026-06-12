@@ -3,6 +3,27 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## P3 — Auth + emails
+
+- **Lazy profile creation**: Profile (and nickname) is created at onboarding after
+  verification, not at signup — one uniform flow for email and Google users. Until then
+  users can spectate but not sit.
+- **Bankrolls are write-behind**: in-memory cache is authoritative while seated; every
+  change queues a serialised Profile update. A hard crash could lose the last seconds of
+  bankroll deltas (acceptable at play-money; revisit if it ever matters).
+- **Welcome email idempotency** via `User.welcomedAt` (Better Auth's hook name shifted
+  across versions — empirically `afterEmailVerification` in 1.6.x; the column guard makes
+  the behaviour version-proof).
+- **Dev door**: localStorage-nickname identity survives in dev builds only
+  (`import.meta.env.DEV` in web, `!isProd` + session-miss on the server). Production
+  sockets accept session cookies only.
+- **better-call peer warning** (wants zod 4) is benign: zod 3.25 ships the v4 core under
+  `zod/v4`, which is what better-auth's dependency actually imports.
+- Playwright E2E runs locally against the embedded PG; CI runs unit/integration tests only
+  (browser E2E in CI deferred — revisit in P7/P8).
+- Resend DNS records (SPF/DKIM) are documented in the README at P8 — they depend on the
+  yet-unchosen domain (§22 DOMAIN is TBD).
+
 ## P2 — Realtime tables + bots
 
 - **Dev identity** (`realtime/users.ts`): nickname-keyed ephemeral users + in-memory

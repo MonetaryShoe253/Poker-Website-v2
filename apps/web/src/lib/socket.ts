@@ -23,8 +23,18 @@ export function getSocket(): Socket {
     const nickname = getNickname();
     socket = io({
       transports: ["websocket"],
+      // Session cookies ride the upgrade request; the dev nickname is a
+      // non-production fallback the server only honours without a session.
       auth: nickname ? { nickname } : {},
     });
   }
   return socket;
+}
+
+/** Drop and rebuild the connection (after sign-in/out or onboarding). */
+export function resetSocket(): void {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
 }

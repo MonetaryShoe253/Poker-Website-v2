@@ -26,15 +26,18 @@ enum SessionStatus {
 }
 
 // ---------------------------------------------------------------------------
-// Identity (Better Auth adds its own tables in P3; User is the app-facing row)
+// Identity — User is shared between Better Auth and the app
 // ---------------------------------------------------------------------------
 
 model User {
   id            String   @id @default(cuid())
   email         String   @unique @db.Citext
   name          String?
+  image         String?
   role          Role     @default(USER)
   emailVerified Boolean  @default(false)
+  /// Set when the welcome email goes out (idempotency guard).
+  welcomedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -42,13 +45,67 @@ model User {
   submissions Submission[]
   eloHistory  EloHistory[]
   auditLogs   AuditLog[]   @relation("AuditActor")
+  sessions    AuthSession[]
+  accounts    Account[]
+
+  @@map("user")
+}
+
+// --- Better Auth tables ------------------------------------------------------
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }
 
 model Profile {
   id               String    @id @default(cuid())
   userId           String    @unique
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  nickname         String    @unique @db.Citext
+  /// Null until onboarding completes (Google users pick on first login).
+  nickname         String?   @unique @db.Citext
   avatarId         String    @default("spade-ember")
   bankroll         Int       @default(25000)
   elo              Float     @default(1000)

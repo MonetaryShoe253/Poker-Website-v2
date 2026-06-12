@@ -1,5 +1,8 @@
-import { Link, NavLink, Outlet } from "react-router";
+import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Wordmark } from "./Wordmark";
+import { authClient } from "../lib/auth";
+import { invalidateMe, useMe } from "../lib/useMe";
+import { resetSocket } from "../lib/socket";
 
 const navItems = [
   { to: "/society", label: "Society" },
@@ -8,6 +11,42 @@ const navItems = [
   { to: "/leaderboards", label: "Leaderboards" },
   { to: "/play", label: "Play" },
 ];
+
+function AuthMenu() {
+  const { me, loading, refresh } = useMe();
+  const navigate = useNavigate();
+  if (loading) return null;
+  if (!me?.user) {
+    return (
+      <NavLink
+        to="/auth"
+        className="rounded border border-steel px-3 py-1.5 font-display text-xs tracking-wide text-muted hover:border-ember hover:text-ember"
+      >
+        Sign in
+      </NavLink>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2 text-xs">
+      <span className="font-display tracking-wide text-text">
+        {me.profile?.nickname ?? me.user.name ?? "…"}
+      </span>
+      <button
+        className="text-muted underline hover:text-text"
+        onClick={() => {
+          void authClient.signOut().then(() => {
+            invalidateMe();
+            resetSocket();
+            void refresh();
+            navigate("/");
+          });
+        }}
+      >
+        Sign out
+      </button>
+    </span>
+  );
+}
 
 export function Layout() {
   return (
@@ -32,6 +71,9 @@ export function Layout() {
                 </NavLink>
               </li>
             ))}
+            <li className="ml-2">
+              <AuthMenu />
+            </li>
           </ul>
         </nav>
         <div className="ember-rail" />

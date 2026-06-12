@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { SOCKET_EVENTS as EV, type BotTier } from "@uos-poker/shared";
 import { getNickname, getSocket, setNickname } from "../lib/socket";
 import { useLobby } from "../lib/useTable";
+import { useMe } from "../lib/useMe";
 
 export function PlayPage() {
   const [nickname, setNick] = useState(getNickname() ?? "");
@@ -10,6 +11,13 @@ export function PlayPage() {
   const [tier, setTier] = useState<BotTier>("CASUAL");
   const lobby = useLobby();
   const navigate = useNavigate();
+  const { me, loading } = useMe();
+
+  // Real identity: a verified account with a nickname. The localStorage
+  // dev door survives only in dev builds.
+  const authedNick = me?.user && me.profile?.nickname ? me.profile.nickname : null;
+  const devDoorAllowed = import.meta.env.DEV;
+  const playableNick = authedNick ?? (devDoorAllowed ? savedNick : null);
 
   const saveNickname = () => {
     const trimmed = nickname.trim();
@@ -34,32 +42,68 @@ export function PlayPage() {
     navigate("/table");
   };
 
+  if (loading) {
+    return (
+      <section className="mx-auto max-w-4xl px-4 py-16 text-center text-muted">
+        Shuffling up…
+      </section>
+    );
+  }
+
   return (
     <section className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="font-display text-3xl font-semibold tracking-[0.12em]">THE LOBBY</h1>
 
-      {!savedNick ? (
+      {me?.user && !me.profile?.nickname ? (
+        <div className="panel-steel mt-6 rounded-lg p-6 text-center">
+          <p className="text-muted">One step left — pick the name you'll play under.</p>
+          <Link
+            to="/onboarding"
+            className="mt-3 inline-block rounded bg-ember-deep px-4 py-2 font-display text-sm text-white hover:bg-ember"
+          >
+            Pick your name
+          </Link>
+        </div>
+      ) : !playableNick ? (
         <div className="panel-steel mt-6 rounded-lg p-6">
-          <h2 className="font-display text-lg">Pick a nickname to play</h2>
+          <h2 className="font-display text-lg">Sign in to play</h2>
           <p className="mt-1 text-sm text-muted">
-            3–16 characters: letters, numbers, _ or -. (Accounts arrive soon — this is the dev
-            door.)
+            Spectating is open to everyone — taking a seat needs a verified account.
           </p>
-          <div className="mt-4 flex gap-2">
-            <input
-              value={nickname}
-              onChange={(e) => setNick(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveNickname()}
-              className="rounded border border-steel bg-bg-0 px-3 py-2 text-text outline-none focus:border-ember"
-              placeholder="Nickname"
-            />
-            <button
-              onClick={saveNickname}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link
+              to="/auth?mode=signup"
               className="rounded bg-ember-deep px-4 py-2 font-display text-sm text-white hover:bg-ember"
             >
-              Take a seat
-            </button>
+              Reserve a seat
+            </Link>
+            <Link
+              to="/auth"
+              className="rounded border border-steel px-4 py-2 font-display text-sm hover:border-ember hover:text-ember"
+            >
+              Sign in
+            </Link>
           </div>
+          {devDoorAllowed && (
+            <div className="mt-5 border-t border-line pt-4">
+              <p className="text-xs text-muted">Dev door (local only):</p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={nickname}
+                  onChange={(e) => setNick(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && saveNickname()}
+                  className="rounded border border-steel bg-bg-0 px-3 py-2 text-sm text-text outline-none focus:border-ember"
+                  placeholder="Nickname"
+                />
+                <button
+                  onClick={saveNickname}
+                  className="rounded border border-steel px-3 py-1 font-display text-sm hover:border-ember"
+                >
+                  Use
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -90,10 +134,15 @@ export function PlayPage() {
               </button>
             </div>
             <span className="text-sm text-muted">
-              Playing as <span className="text-text">{savedNick}</span>{" "}
-              <button className="underline" onClick={() => setSavedNick(null)}>
-                change
-              </button>
+              Playing as <span className="text-text">{playableNick}</span>
+              {!authedNick && (
+                <>
+                  {" "}
+                  <button className="underline" onClick={() => setSavedNick(null)}>
+                    change
+                  </button>
+                </>
+              )}
             </span>
           </div>
 
