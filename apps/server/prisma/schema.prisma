@@ -151,6 +151,7 @@ model Session {
 
   submissions Submission[]
 
+  @@unique([seasonId, date, type])
   @@index([seasonId, date])
 }
 
@@ -250,6 +251,12 @@ model Announcement {
   active    Boolean  @default(true)
   createdBy String
   createdAt DateTime @default(now())
+}
+
+/// Free-form operational settings (e.g. "sessionRecurrence").
+model Setting {
+  key   String @id
+  value Json
 }
 
 model AuditLog {

@@ -1,9 +1,56 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { SOCKET_EVENTS as EV, type BotTier } from "@uos-poker/shared";
 import { getNickname, getSocket, setNickname } from "../lib/socket";
 import { useLobby } from "../lib/useTable";
 import { useMe } from "../lib/useMe";
+
+function BankrollPanel() {
+  const [bankroll, setBankroll] = useState<number | null>(null);
+  const [bonusAvailable, setBonusAvailable] = useState(false);
+  const [flash, setFlash] = useState(false);
+
+  const load = () =>
+    void fetch("/api/bankroll", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { bankroll: number; bonusAvailable: boolean } | null) => {
+        if (data) {
+          setBankroll(data.bankroll);
+          setBonusAvailable(data.bonusAvailable);
+        }
+      });
+
+  useEffect(load, []);
+
+  const claim = async () => {
+    const res = await fetch("/api/bonus/claim", { method: "POST", credentials: "include" });
+    if (res.ok) {
+      const data = (await res.json()) as { bankroll: number };
+      setBankroll(data.bankroll);
+      setBonusAvailable(false);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 1500);
+    }
+  };
+
+  if (bankroll === null) return null;
+  return (
+    <div className="panel-steel flex items-center gap-3 rounded px-3 py-2">
+      <span className="text-sm text-muted">Bankroll</span>
+      <span className={`tnum font-display text-lg ${flash ? "text-gold" : "text-text"}`}>
+        {bankroll.toLocaleString()}
+      </span>
+      {bonusAvailable && (
+        <button
+          onClick={() => void claim()}
+          className="rounded bg-ember-deep px-3 py-1 font-display text-xs text-white shadow-ember hover:bg-ember"
+        >
+          Claim daily +5,000
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function PlayPage() {
   const [nickname, setNick] = useState(getNickname() ?? "");
@@ -133,6 +180,7 @@ export function PlayPage() {
                 Deal me in
               </button>
             </div>
+            {authedNick && <BankrollPanel />}
             <span className="text-sm text-muted">
               Playing as <span className="text-text">{playableNick}</span>
               {!authedNick && (

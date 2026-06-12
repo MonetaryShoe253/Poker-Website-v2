@@ -190,6 +190,7 @@ export class Table {
   private rng = createCryptoRng();
 
   private handLog: string[] = [];
+  private handWinners: Array<{ seat: number; amount: number; handName?: string }> = [];
   private recentPots: number[] = [];
   humanlessSince: number | null = Date.now();
   private closed = false;
@@ -700,6 +701,7 @@ export class Table {
       switch (event.type) {
         case "HAND_START": {
           this.view = freshView();
+          this.handWinners = [];
           this.view.phase = "BETTING";
           this.view.street = "PREFLOP";
           this.view.buttonSeat = event.buttonSeat;
@@ -821,6 +823,11 @@ export class Table {
             if (!this.view.winningSeats.includes(payout.seat)) {
               this.view.winningSeats.push(payout.seat);
             }
+            this.handWinners.push({
+              seat: payout.seat,
+              amount: payout.amount,
+              ...(payout.handName !== undefined ? { handName: payout.handName } : {}),
+            });
             const player = this.seats[payout.seat];
             this.emitTableEvent({
               kind: "WIN",
@@ -882,9 +889,10 @@ export class Table {
       handNo: this.handNo,
       rated: !this.isPractice && humanInHand,
       players: settlementPlayers,
-      winners: this.view.winningSeats.map((seat) => ({
-        nickname: this.seats[seat]?.nickname ?? "?",
-        amount: 0,
+      winners: this.handWinners.map((w) => ({
+        nickname: this.seats[w.seat]?.nickname ?? "?",
+        amount: w.amount,
+        ...(w.handName !== undefined ? { handName: w.handName } : {}),
       })),
       potSize: this.view.totalPot,
       board: this.view.board.join(" "),

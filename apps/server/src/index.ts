@@ -5,6 +5,8 @@ import { devResolveUser, hydrateBankroll, type UserCtx } from "./realtime/users"
 import { sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { env, isProd } from "./env";
+import { startSessionScheduler, stopSessionScheduler } from "./services/seasons";
+import { persistSettlement, pruneOldHandRecords } from "./services/settlement";
 
 const app = await buildServer();
 
@@ -20,10 +22,12 @@ async function resolveSocketUser(handshake: HandshakeInfo): Promise<UserCtx | nu
       const profile = await prisma.profile.findUnique({ where: { userId: session.user.id } });
       if (profile?.nickname) {
         await hydrateBankroll(session.user.id);
+        const settings = profile.settings as { showLosing?: boolean } | null;
         return {
           userId: session.user.id,
           nickname: profile.nickname,
           avatarId: profile.avatarId,
+          showLosing: settings?.showLosing ?? false,
         };
       }
     }
@@ -50,10 +54,22 @@ const fastTiming: TableTiming = {
 const realtime = attachRealtime(app.server, {
   corsOrigin: isProd ? env.SITE_URL : true,
   resolveUser: resolveSocketUser,
+  onHandSettled: (settlement) =>
+    persistSettlement(settlement).catch((err) =>
+      app.log.error({ err }, "settlement persistence failed"),
+    ),
   ...(process.env.UOS_FAST_TABLES && !isProd ? { timing: fastTiming } : {}),
 });
 
+startSessionScheduler();
+const pruneTimer = setInterval(
+  () => void pruneOldHandRecords().catch((err) => app.log.error({ err }, "prune failed")),
+  6 * 60 * 60 * 1000,
+);
+
 app.addHook("onClose", async () => {
+  stopSessionScheduler();
+  clearInterval(pruneTimer);
   realtime.lobby.stop();
   await realtime.io.close();
 });

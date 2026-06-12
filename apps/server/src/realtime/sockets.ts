@@ -11,7 +11,7 @@ import {
   type TableErrorPayload,
 } from "@uos-poker/shared";
 import { Lobby } from "./lobby";
-import type { Table, TableTiming } from "./table";
+import type { HandSettlement, Table, TableTiming } from "./table";
 import { DEFAULT_TIMING } from "./table";
 import { devResolveUser, type UserCtx } from "./users";
 import { filterProfanity } from "../moderation";
@@ -46,6 +46,7 @@ export function attachRealtime(
     scalingIntervalMs?: number;
     resolveUser?: (handshake: HandshakeInfo) => Promise<UserCtx | null> | UserCtx | null;
     corsOrigin?: string | boolean;
+    onHandSettled?: (settlement: HandSettlement) => void | Promise<void>;
   } = {},
 ): RealtimeHandle {
   const io = new Server(httpServer, {
@@ -62,6 +63,7 @@ export function attachRealtime(
   lobby.onChanged = broadcastLobby;
 
   lobby.onTableCreated = (table: Table) => {
+    if (opts.onHandSettled) table.onHandSettled = opts.onHandSettled;
     table.errorSink = (userId, code, message) => {
       for (const [socketId, ctx] of contexts) {
         if (ctx.user?.userId === userId && ctx.watchingTableId === table.id) {
@@ -158,6 +160,7 @@ export function attachRealtime(
         nickname: user.nickname,
         avatarId: user.avatarId,
         buyIn: 10_000,
+        ...(user.showLosing !== undefined ? { showLosing: user.showLosing } : {}),
       });
       if (!result.ok) {
         sendError({ code: result.code as TableErrorPayload["code"], message: result.message });
@@ -176,6 +179,7 @@ export function attachRealtime(
         nickname: user.nickname,
         avatarId: user.avatarId,
         buyIn: 10_000,
+        ...(user.showLosing !== undefined ? { showLosing: user.showLosing } : {}),
       });
       if (!result.ok) {
         sendError({ code: result.code as TableErrorPayload["code"], message: result.message });
@@ -200,6 +204,7 @@ export function attachRealtime(
         avatarId: user.avatarId,
         buyIn: parsed.data.buyIn,
         ...(parsed.data.seat !== undefined ? { seat: parsed.data.seat } : {}),
+        ...(user.showLosing !== undefined ? { showLosing: user.showLosing } : {}),
       });
       if (!result.ok) {
         sendError({ code: result.code as TableErrorPayload["code"], message: result.message });

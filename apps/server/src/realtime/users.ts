@@ -13,6 +13,8 @@ export interface UserCtx {
   userId: string;
   nickname: string;
   avatarId: string;
+  /** Show losing hands at showdown instead of mucking (profile setting). */
+  showLosing?: boolean;
 }
 
 const cache = new Map<string, number>();

@@ -28,9 +28,9 @@ function AuthMenu() {
   }
   return (
     <span className="flex items-center gap-2 text-xs">
-      <span className="font-display tracking-wide text-text">
+      <Link to="/profile" className="font-display tracking-wide text-text hover:text-ember">
         {me.profile?.nickname ?? me.user.name ?? "…"}
-      </span>
+      </Link>
       <button
         className="text-muted underline hover:text-text"
         onClick={() => {

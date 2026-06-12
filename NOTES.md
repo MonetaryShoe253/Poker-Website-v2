@@ -3,6 +3,22 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## P4 — Elo, leaderboards, submissions
+
+- **Season auto-creation**: if no active season exists the server creates the academic year
+  (1 Sep–31 Aug, London) with the default points scheme, so boards/submissions work before
+  any admin touches P6. Admins can rename/end it later.
+- **Recurrence config** lives in the `Setting` table (`sessionRecurrence`); default
+  Tue TOURNAMENT / Thu CASH. Admin editor arrives in P6.
+- **Settlement persistence skips bot-only and dev-door hands** (nothing meaningful to
+  store). Rated Elo settlements with a real signed-in user are exercised by unit tests +
+  wiring; live-path verification rolled into the P7 E2E sweep.
+- **Movement arrows** are computed on the fly (totals now vs totals excluding the last
+  7 days) rather than from rank snapshots — exact enough and no extra tables.
+- **HandRecord pruning**: unrated records older than 7 days are deleted; rated ones keep
+  their summaries forever (boards/history) but drop action logs.
+- Hall of Fame derives at "end season" (P6 admin action); the read endpoint exists now.
+
 ## P3 — Auth + emails
 
 - **Lazy profile creation**: Profile (and nickname) is created at onboarding after

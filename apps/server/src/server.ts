@@ -8,6 +8,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { env, isProd } from "./env";
 import { registerApiRoutes } from "./routes";
+import { registerGameRoutes } from "./routes-game";
 
 export async function buildServer() {
   const isTest = env.NODE_ENV === "test" || process.env.VITEST !== undefined;
@@ -38,6 +39,7 @@ export async function buildServer() {
   app.get("/healthz", async () => ({ ok: true, uptime: process.uptime() }));
 
   await registerApiRoutes(app);
+  await registerGameRoutes(app);
 
   // In production the server serves the built SPA.
   const webDist = path.resolve(import.meta.dirname, "../../web/dist");
