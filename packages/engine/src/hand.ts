@@ -290,6 +290,18 @@ export class PokerHand {
     return this.computeLivePots();
   }
 
+  /** All chips committed to the hand so far (pots + this street's bets). */
+  get totalPotSize(): number {
+    let sum = 0;
+    for (const p of this.players.values()) sum += p.committedTotal;
+    return sum;
+  }
+
+  /** Highest commitment this street (the price to play). */
+  get streetCurrentBet(): number {
+    return this.currentBet;
+  }
+
   get isComplete(): boolean {
     return this.phase === "COMPLETE";
   }

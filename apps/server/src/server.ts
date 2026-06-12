@@ -8,11 +8,14 @@ import fs from "node:fs";
 import { env, isProd } from "./env";
 
 export async function buildServer() {
+  const isTest = env.NODE_ENV === "test" || process.env.VITEST !== undefined;
   const app = Fastify({
-    logger: {
-      level: isProd ? "info" : "debug",
-      transport: isProd ? undefined : { target: "pino-pretty", options: { colorize: true } },
-    },
+    logger: isTest
+      ? { level: "warn" }
+      : {
+          level: isProd ? "info" : "debug",
+          transport: isProd ? undefined : { target: "pino-pretty", options: { colorize: true } },
+        },
   });
 
   await app.register(helmet, {
