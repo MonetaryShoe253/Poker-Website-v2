@@ -26,4 +26,18 @@ export default tseslint.config(
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
     },
   },
+  {
+    // Node utility scripts (OG generation, visual sweeps). Browser globals
+    // appear inside addInitScript/page.evaluate callbacks.
+    files: ["**/scripts/**"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        localStorage: "readonly",
+        window: "readonly",
+        document: "readonly",
+      },
+    },
+  },
 );

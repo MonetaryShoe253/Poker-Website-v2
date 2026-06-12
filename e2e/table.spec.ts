@@ -27,7 +27,7 @@ test("two browsers + bots complete full hands", async ({ browser }) => {
   await expect(alice.getByText("AliceE2E").first()).toBeVisible({ timeout: 15_000 });
 
   // Bots fill in, visibly badged.
-  await expect(alice.getByText(/bot·/).first()).toBeVisible({ timeout: 15_000 });
+  await expect(alice.getByText(/bot\s*·/).first()).toBeVisible({ timeout: 15_000 });
 
   // Her hole cards arrive (two card faces on her seat) and the action dock
   // offers only legal actions at some point. Fold when offered, like a human.

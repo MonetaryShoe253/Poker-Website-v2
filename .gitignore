@@ -13,6 +13,7 @@ coverage/
 
 # tooling
 .eslintcache
+.screenshots/
 .turbo/
 playwright-report/
 test-results/

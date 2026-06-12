@@ -52,17 +52,17 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-bg-0 text-text">
       <header className="fixed inset-x-0 top-0 z-50 bg-bg-0/90 backdrop-blur">
-        <nav className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link to="/" aria-label="UOS Poker home">
+        <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-2 px-4 py-2 sm:h-14 sm:flex-nowrap sm:py-0">
+          <Link to="/" aria-label="UOS Poker home" className="shrink-0">
             <Wordmark />
           </Link>
-          <ul className="flex items-center gap-1 text-sm">
+          <ul className="-mx-1 flex w-full items-center gap-0.5 overflow-x-auto text-sm sm:mx-0 sm:w-auto sm:gap-1">
             {navItems.map((item) => (
-              <li key={item.to}>
+              <li key={item.to} className="shrink-0">
                 <NavLink
                   to={item.to}
                   className={({ isActive }) =>
-                    `rounded px-3 py-2 font-display tracking-wide transition-colors ${
+                    `rounded px-2 py-1.5 font-display text-[13px] tracking-wide transition-colors sm:px-3 sm:py-2 sm:text-sm ${
                       isActive ? "text-ember" : "text-muted hover:text-text"
                     }`
                   }
@@ -71,7 +71,7 @@ export function Layout() {
                 </NavLink>
               </li>
             ))}
-            <li className="ml-2">
+            <li className="ml-1 shrink-0 sm:ml-2">
               <AuthMenu />
             </li>
           </ul>
@@ -79,7 +79,7 @@ export function Layout() {
         <div className="ember-rail" />
       </header>
 
-      <main className="flex-1 pt-14">
+      <main className="flex-1 pt-[5.5rem] sm:pt-14">
         <Outlet />
       </main>
 

@@ -113,6 +113,8 @@ export interface TableStatePayload {
   /** Hand names shown at showdown, by seat. */
   shownHandNames: Record<number, string>;
   winningSeats: number[];
+  /** The five cards forming the winning hand(s) — the showdown glow. */
+  winningCards: string[];
   spectators: number;
   /** Viewer-specific. */
   mySeat: number | null;

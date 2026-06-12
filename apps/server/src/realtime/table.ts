@@ -117,6 +117,8 @@ interface ViewState {
   revealed: Record<number, string[]>;
   shownHandNames: Record<number, string>;
   winningSeats: number[];
+  winningCards: string[];
+  bestFiveBySeat: Record<number, string[]>;
   buttonSeat: number | null;
 }
 
@@ -135,6 +137,8 @@ const freshView = (): ViewState => ({
   revealed: {},
   shownHandNames: {},
   winningSeats: [],
+  winningCards: [],
+  bestFiveBySeat: {},
   buttonSeat: null,
 });
 
@@ -802,6 +806,7 @@ export class Table {
         case "SHOWDOWN_SHOW": {
           this.view.revealed[event.seat] = event.cards.map(cardToString);
           this.view.shownHandNames[event.seat] = event.handName;
+          this.view.bestFiveBySeat[event.seat] = event.bestFive.map(cardToString);
           this.emitTableEvent({
             kind: "REVEAL",
             seat: event.seat,
@@ -828,6 +833,12 @@ export class Table {
               amount: payout.amount,
               ...(payout.handName !== undefined ? { handName: payout.handName } : {}),
             });
+            const bestFive = this.view.bestFiveBySeat[payout.seat];
+            if (bestFive) {
+              for (const card of bestFive) {
+                if (!this.view.winningCards.includes(card)) this.view.winningCards.push(card);
+              }
+            }
             const player = this.seats[payout.seat];
             this.emitTableEvent({
               kind: "WIN",
@@ -1044,6 +1055,7 @@ export class Table {
       revealed: this.view.revealed,
       shownHandNames: this.view.shownHandNames,
       winningSeats: this.view.winningSeats,
+      winningCards: this.view.winningCards,
       spectators: this.spectatorCount(),
       mySeat,
       myCards: myHole,

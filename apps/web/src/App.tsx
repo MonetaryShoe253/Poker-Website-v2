@@ -1,7 +1,10 @@
 import { Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { SocietyPage } from "./pages/SocietyPage";
+import { SessionsPage } from "./pages/SessionsPage";
+import { LearnPage } from "./pages/LearnPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { PlayPage } from "./pages/PlayPage";
 import { TablePage } from "./pages/TablePage";
 import { AuthPage } from "./pages/AuthPage";
@@ -17,9 +20,9 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
-        <Route path="society" element={<PlaceholderPage title="The Society" />} />
-        <Route path="sessions" element={<PlaceholderPage title="Sessions" />} />
-        <Route path="learn" element={<PlaceholderPage title="Learn poker" />} />
+        <Route path="society" element={<SocietyPage />} />
+        <Route path="sessions" element={<SessionsPage />} />
+        <Route path="learn" element={<LearnPage />} />
         <Route path="leaderboards" element={<LeaderboardsPage />} />
         <Route path="play" element={<PlayPage />} />
         <Route path="table" element={<TablePage />} />
@@ -29,7 +32,7 @@ export function App() {
         <Route path="check-inbox" element={<CheckInboxPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
         <Route path="reset-password" element={<ResetPasswordPage />} />
-        <Route path="*" element={<PlaceholderPage title="Dead hand" notFound />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   );
