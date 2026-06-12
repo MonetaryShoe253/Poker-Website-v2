@@ -1,0 +1,39 @@
+{
+  "name": "uos-poker",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "UOS Poker — University of Sheffield Poker Society. Society home, leaderboards, and a play-money online poker room.",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@embedded-postgres/windows-x64",
+      "@embedded-postgres/linux-x64",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @uos-poker/server --filter @uos-poker/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "db:migrate": "pnpm --filter @uos-poker/server db:migrate",
+    "db:studio": "pnpm --filter @uos-poker/server db:studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
+    "eslint-config-prettier": "^10.1.5",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0"
+  }
+}

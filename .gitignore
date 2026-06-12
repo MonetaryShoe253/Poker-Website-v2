@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+
+# embedded dev postgres data + binaries
+.pgdata/
+.pg/
+
+# tooling
+.eslintcache
+.turbo/
+playwright-report/
+test-results/
+
+# OS
+Thumbs.db
+.DS_Store

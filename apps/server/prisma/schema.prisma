@@ -1,0 +1,208 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SessionType {
+  TOURNAMENT
+  CASH
+}
+
+enum SessionStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+// ---------------------------------------------------------------------------
+// Identity (Better Auth adds its own tables in P3; User is the app-facing row)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique @db.Citext
+  name          String?
+  role          Role     @default(USER)
+  emailVerified Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile     Profile?
+  submissions Submission[]
+  eloHistory  EloHistory[]
+  auditLogs   AuditLog[]   @relation("AuditActor")
+}
+
+model Profile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname         String    @unique @db.Citext
+  avatarId         String    @default("spade-ember")
+  bankroll         Int       @default(25000)
+  elo              Float     @default(1000)
+  ratedHands       Int       @default(0)
+  /// { sounds: boolean, fourColourDeck: boolean, autoMuck: boolean }
+  settings         Json      @default("{\"sounds\":true,\"fourColourDeck\":false,\"autoMuck\":true}")
+  lastDailyBonusAt DateTime?
+  chatBannedAt     DateTime?
+  suspendedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Seasons, sessions, submissions (in-person)
+// ---------------------------------------------------------------------------
+
+model Season {
+  id        String   @id @default(cuid())
+  name      String
+  startsAt  DateTime
+  endsAt    DateTime
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  sessions     Session[]
+  pointsScheme PointsScheme?
+  hallOfFame   HallOfFameEntry[]
+}
+
+model Session {
+  id                 String        @id @default(cuid())
+  type               SessionType
+  /// The session's calendar date, midnight Europe/London stored as UTC instant.
+  date               DateTime
+  code               String
+  submissionsOpenAt  DateTime
+  submissionsCloseAt DateTime
+  status             SessionStatus @default(SCHEDULED)
+  seasonId           String
+  season             Season        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  createdAt          DateTime      @default(now())
+
+  submissions Submission[]
+
+  @@index([seasonId, date])
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Tournament payload
+  finishingPosition Int?
+  entrantCount      Int?
+  /// Derived from the season's points scheme; recomputed on scheme edits.
+  points            Int?
+
+  // Cash payload (chips)
+  buyInChips   Int?
+  cashOutChips Int?
+  /// cashOutChips - buyInChips, denormalised for board queries.
+  netChips     Int?
+
+  voidedAt DateTime?
+  voidedBy String?
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+}
+
+model PointsScheme {
+  id       String @id @default(cuid())
+  seasonId String @unique
+  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  /// { positions: { "1": 10, "2": 7, ... }, participation: 1 }
+  scheme   Json
+}
+
+model HallOfFameEntry {
+  id       String      @id @default(cuid())
+  seasonId String
+  season   Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  board    SessionType
+  nickname String
+  value    Int
+
+  @@unique([seasonId, board])
+}
+
+// ---------------------------------------------------------------------------
+// Online play
+// ---------------------------------------------------------------------------
+
+model HandRecord {
+  id        String   @id @default(cuid())
+  tableId   String
+  tableName String
+  handNo    Int
+  /// [{ seat, userId?, botId?, nickname, startingStack, net }]
+  players   Json
+  /// [{ nickname, amount, handName? }]
+  winners   Json
+  potSize   Int
+  board     String
+  summary   String
+  rated     Boolean
+  /// { userId: delta } for rated hands
+  eloDeltas Json?
+  /// Full action log; pruned after 7 days.
+  actionLog Json?
+  createdAt DateTime @default(now())
+
+  @@index([tableId, handNo])
+  @@index([createdAt])
+}
+
+model EloHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  delta       Float
+  ratingAfter Float
+  handCount   Int
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Ops
+// ---------------------------------------------------------------------------
+
+model Announcement {
+  id        String   @id @default(cuid())
+  message   String
+  active    Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  actor     User     @relation("AuditActor", fields: [actorId], references: [id])
+  action    String
+  /// Arbitrary structured context for the mutation.
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
