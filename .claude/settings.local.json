@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(pnpm --filter @uos-poker/engine test 2>&1)"
+    ]
+  }
+}
