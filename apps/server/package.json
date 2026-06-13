@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:dev": "tsx scripts/dev-db.ts",
-    "db:migrate": "prisma migrate dev",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "dotenv -e ../../.env -- prisma studio"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -39,6 +39,7 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "@types/react": "^19.2.17",
+    "dotenv-cli": "^8.0.0",
     "embedded-postgres": "^17.5.0-beta.15",
     "socket.io-client": "^4.8.3",
     "typescript": "^5.8.3",
