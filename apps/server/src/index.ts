@@ -7,6 +7,7 @@ import { prisma } from "./db";
 import { env, isProd } from "./env";
 import { startSessionScheduler, stopSessionScheduler } from "./services/seasons";
 import { persistSettlement, pruneOldHandRecords } from "./services/settlement";
+import { setLiveStatsProvider } from "./realtime/stats";
 
 const app = await buildServer();
 
@@ -60,6 +61,12 @@ const realtime = attachRealtime(app.server, {
     ),
   ...(process.env.UOS_FAST_TABLES && !isProd ? { timing: fastTiming } : {}),
 });
+
+setLiveStatsProvider(() => ({
+  tables: realtime.lobby.allTables().length,
+  seatedHumans: realtime.lobby.allTables().reduce((sum, t) => sum + t.humanCount(), 0),
+  clients: realtime.io.engine.clientsCount,
+}));
 
 startSessionScheduler();
 const pruneTimer = setInterval(

@@ -3,6 +3,23 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## P6 — Admin
+
+- **Session codes live only in the admin API** (`/api/admin/sessions`) — never in any public
+  endpoint. The admin Sessions tab displays them big for whoever runs the night.
+- **Every admin mutation writes an `AuditLog` row** via the `audit()` helper; the dashboard
+  surfaces the last 12.
+- **`requireAdmin`** checks the session's role on every admin route (no client trust).
+- **"End season"** freezes the season and derives Hall of Fame champions (top tournament
+  points + top cash net) in one transaction.
+- **Live stats** (tables/seated humans/clients) bridge from the realtime layer to the admin
+  dashboard via `realtime/stats.ts` (set in index.ts, read in routes-admin.ts) to avoid an
+  import cycle.
+- **Playwright runs serially now** (`workers: 1`) because the admin spec mutates shared DB
+  state (points scheme, banner); the admin account is seeded via `ADMIN_EMAIL` in the
+  Playwright server env. Banner-set assertions wait on the input clearing (deterministic)
+  rather than racing the PUT round-trip.
+
 ## P5 — Design & content
 
 - **Sounds are synthesized** (WebAudio oscillators + filtered noise) — zero asset files,

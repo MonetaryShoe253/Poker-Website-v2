@@ -9,6 +9,7 @@ import fs from "node:fs";
 import { env, isProd } from "./env";
 import { registerApiRoutes } from "./routes";
 import { registerGameRoutes } from "./routes-game";
+import { registerAdminRoutes } from "./routes-admin";
 
 export async function buildServer() {
   const isTest = env.NODE_ENV === "test" || process.env.VITEST !== undefined;
@@ -40,6 +41,7 @@ export async function buildServer() {
 
   await registerApiRoutes(app);
   await registerGameRoutes(app);
+  await registerAdminRoutes(app);
 
   // In production the server serves the built SPA.
   const webDist = path.resolve(import.meta.dirname, "../../web/dist");

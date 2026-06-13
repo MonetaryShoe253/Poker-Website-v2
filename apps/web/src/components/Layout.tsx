@@ -1,8 +1,25 @@
+import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { Wordmark } from "./Wordmark";
 import { authClient } from "../lib/auth";
 import { invalidateMe, useMe } from "../lib/useMe";
 import { resetSocket } from "../lib/socket";
+
+function AnnouncementBanner() {
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    void fetch("/api/announcement")
+      .then((r) => r.json())
+      .then((data: { message: string | null }) => setMessage(data.message))
+      .catch(() => {});
+  }, []);
+  if (!message) return null;
+  return (
+    <div className="border-b border-ember/40 bg-ember/10 px-4 py-2 text-center text-sm text-text">
+      {message}
+    </div>
+  );
+}
 
 const navItems = [
   { to: "/society", label: "Society" },
@@ -80,6 +97,7 @@ export function Layout() {
       </header>
 
       <main className="flex-1 pt-[5.5rem] sm:pt-14">
+        <AnnouncementBanner />
         <Outlet />
       </main>
 

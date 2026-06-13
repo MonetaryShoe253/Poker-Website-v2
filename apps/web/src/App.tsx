@@ -14,6 +14,7 @@ import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { LeaderboardsPage } from "./pages/LeaderboardsPage";
 import { SubmitResultPage } from "./pages/SubmitResultPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { AdminPage } from "./pages/AdminPage";
 
 export function App() {
   return (
@@ -28,6 +29,7 @@ export function App() {
         <Route path="table" element={<TablePage />} />
         <Route path="submit" element={<SubmitResultPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="admin" element={<AdminPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="check-inbox" element={<CheckInboxPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />

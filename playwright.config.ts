@@ -4,6 +4,8 @@ export default defineConfig({
   testDir: "./e2e",
   timeout: 120_000,
   retries: process.env.CI ? 1 : 0,
+  // Serial: the admin spec mutates shared state (scheme, banner).
+  workers: 1,
   use: {
     baseURL: "http://localhost:5173",
     trace: "retain-on-failure",
@@ -18,6 +20,7 @@ export default defineConfig({
         PORT: "3001",
         NODE_ENV: "development",
         UOS_FAST_TABLES: "1",
+        ADMIN_EMAIL: "adminboss@test.local",
       },
     },
     {
