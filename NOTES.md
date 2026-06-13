@@ -3,6 +3,27 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## P8 — Deploy
+
+- **Runtime uses tsx** (`node --import tsx src/index.ts`), not a compiled build: the workspace
+  packages export TS source directly, so tsx transpiles on the fly. `tsx` and the `prisma` CLI
+  are therefore runtime **dependencies**, not devDeps. Documented as a deliberate choice for a
+  single-instance app; a bundler step (tsup/esbuild) is the "proper" alternative if scale ever
+  demands it.
+- **`start:prod`** = `prisma migrate deploy && node --import tsx src/index.ts` — migrate-on-
+  release baked into the start command (Railway has no separate release phase in `railway.json`).
+- **Dockerfile** is single-stage on `node:22-slim` + `openssl` (Prisma engines need it). Build
+  installs all deps (vite/prisma needed), generates the client, builds the SPA. `embedded-postgres`
+  is dev-only but its linux binary is in the lockfile (all platforms recorded), so
+  `--frozen-lockfile` works in the container.
+- **Could not run the container locally** — Docker isn't installed on this Windows machine. Verified
+  instead: `--frozen-lockfile` install, `db:generate`, web build, and `start:prod` (migrate + boot
+  + DNS print + prod SPA serve with CSP) all locally. The live Railway smoke test is gated on
+  Kiran's account setup (§21).
+- **Resend DNS**: printed at prod boot from the `EMAIL_FROM` domain. SPF/DMARC/MX in full; DKIM
+  value must be copied from the Resend dashboard (per-domain, can't be known at build time) — we
+  point to it rather than fabricate one.
+
 ## P7 — Hardening
 
 - **Suspension enforcement**: suspended accounts fall through `resolveSocketUser` to anonymous

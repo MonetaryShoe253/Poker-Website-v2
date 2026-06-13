@@ -8,6 +8,7 @@ import { env, isProd } from "./env";
 import { startSessionScheduler, stopSessionScheduler } from "./services/seasons";
 import { persistSettlement, pruneOldHandRecords } from "./services/settlement";
 import { setLiveStatsProvider } from "./realtime/stats";
+import { printResendDnsRecords } from "./email/dns";
 
 const app = await buildServer();
 
@@ -87,6 +88,7 @@ app.addHook("onClose", async () => {
 try {
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   app.log.info(`UOS Poker server listening on :${env.PORT}`);
+  printResendDnsRecords();
 } catch (err) {
   app.log.error(err);
   process.exit(1);
