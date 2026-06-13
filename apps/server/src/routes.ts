@@ -74,7 +74,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Create or rename the profile nickname (onboarding + profile page).
-  app.post("/api/profile", async (req, reply) => {
+  app.post("/api/profile", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
     const session = await sessionFromHeaders({ cookie: req.headers.cookie });
     if (!session?.user) {
       return reply.code(401).send({ error: "Sign in first." });

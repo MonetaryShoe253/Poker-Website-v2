@@ -15,6 +15,8 @@ export interface UserCtx {
   avatarId: string;
   /** Show losing hands at showdown instead of mucking (profile setting). */
   showLosing?: boolean;
+  /** Chat-banned by an admin: connection is fine, messages are dropped. */
+  chatBanned?: boolean;
 }
 
 const cache = new Map<string, number>();

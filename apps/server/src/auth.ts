@@ -33,6 +33,11 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   trustedOrigins: [env.SITE_URL],
   database: prismaAdapter(prisma, { provider: "postgresql" }),
+  advanced: {
+    // HTTPS in production (Railway) → Secure cookies; httpOnly is default.
+    useSecureCookies: env.NODE_ENV === "production",
+    defaultCookieAttributes: { sameSite: "lax" },
+  },
   session: {
     modelName: "authSession",
   },

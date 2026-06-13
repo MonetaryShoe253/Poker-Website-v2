@@ -126,6 +126,7 @@ export function attachRealtime(
         userId: ctx.user?.userId ?? null,
         emitState: (state) => socket.emit(EV.tableState, state),
         emitEvent: (event) => socket.emit(EV.tableEvent, event),
+        emitNotice: (notice) => socket.emit(EV.serverNotice, notice),
       });
     };
 
@@ -250,6 +251,9 @@ export function attachRealtime(
       if (!user) return;
       const parsed = ChatSchema.safeParse(raw);
       if (!parsed.success) return;
+      // Chat-banned users connect and play normally; their messages are
+      // silently dropped (they see their own send, others see nothing).
+      if (user.chatBanned) return;
       const now = Date.now();
       ctx.chatTimestamps = ctx.chatTimestamps.filter((t) => now - t < CHAT_RATE.perMs);
       if (ctx.chatTimestamps.length >= CHAT_RATE.messages) {

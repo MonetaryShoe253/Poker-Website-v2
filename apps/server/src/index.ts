@@ -21,7 +21,9 @@ async function resolveSocketUser(handshake: HandshakeInfo): Promise<UserCtx | nu
     const session = await sessionFromHeaders({ cookie: handshake.headers.cookie });
     if (session?.user && session.user.emailVerified) {
       const profile = await prisma.profile.findUnique({ where: { userId: session.user.id } });
-      if (profile?.nickname) {
+      // Suspended accounts fall through to anonymous spectator — they keep a
+      // read-only view but can't sit, chat, or play.
+      if (profile?.nickname && profile.suspendedAt === null) {
         await hydrateBankroll(session.user.id);
         const settings = profile.settings as { showLosing?: boolean } | null;
         return {
@@ -29,6 +31,7 @@ async function resolveSocketUser(handshake: HandshakeInfo): Promise<UserCtx | nu
           nickname: profile.nickname,
           avatarId: profile.avatarId,
           showLosing: settings?.showLosing ?? false,
+          chatBanned: profile.chatBannedAt !== null,
         };
       }
     }

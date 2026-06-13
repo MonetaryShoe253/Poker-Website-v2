@@ -150,6 +150,11 @@ export interface ChatPayload {
   at: number;
 }
 
+export interface ServerNoticePayload {
+  message: string;
+  kind: "info" | "warning";
+}
+
 export interface TableErrorPayload {
   code:
     | "NOT_YOUR_TURN"

@@ -23,8 +23,27 @@ export async function buildServer() {
   });
 
   await app.register(helmet, {
-    // The SPA is same-origin in prod; CSP is finalised in the hardening phase.
-    contentSecurityPolicy: false,
+    // SPA is same-origin in prod. style-src needs 'unsafe-inline' (React/
+    // Framer inline styles); img/font use data: URIs; the Society map is a
+    // Google Maps iframe; connect-src allows same-origin WS for Socket.IO.
+    contentSecurityPolicy: isProd
+      ? {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            fontSrc: ["'self'", "data:"],
+            connectSrc: ["'self'", "ws:", "wss:"],
+            frameSrc: ["https://www.google.com", "https://maps.google.com"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"],
+          },
+        }
+      : false,
+    crossOriginEmbedderPolicy: false,
   });
   await app.register(cors, {
     origin: isProd ? env.SITE_URL : true,

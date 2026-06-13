@@ -3,6 +3,7 @@ import {
   SOCKET_EVENTS as EV,
   type ChatPayload,
   type LobbyStatePayload,
+  type ServerNoticePayload,
   type TableErrorPayload,
   type TableStatePayload,
 } from "@uos-poker/shared";
@@ -27,12 +28,14 @@ export interface TableConnection {
   state: TableStatePayload | null;
   chat: ChatPayload[];
   error: TableErrorPayload | null;
+  notice: ServerNoticePayload | null;
 }
 
 export function useTable(): TableConnection {
   const [state, setState] = useState<TableStatePayload | null>(null);
   const [chat, setChat] = useState<ChatPayload[]>([]);
   const [error, setError] = useState<TableErrorPayload | null>(null);
+  const [notice, setNotice] = useState<ServerNoticePayload | null>(null);
 
   useEffect(() => {
     const socket = getSocket();
@@ -42,15 +45,21 @@ export function useTable(): TableConnection {
       setError(e);
       setTimeout(() => setError(null), 4000);
     };
+    const onNotice = (n: ServerNoticePayload) => {
+      setNotice(n);
+      setTimeout(() => setNotice(null), 6000);
+    };
     socket.on(EV.tableState, onState);
     socket.on(EV.tableChat, onChat);
     socket.on(EV.tableError, onError);
+    socket.on(EV.serverNotice, onNotice);
     return () => {
       socket.off(EV.tableState, onState);
       socket.off(EV.tableChat, onChat);
       socket.off(EV.tableError, onError);
+      socket.off(EV.serverNotice, onNotice);
     };
   }, []);
 
-  return { state, chat, error };
+  return { state, chat, error, notice };
 }

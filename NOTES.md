@@ -3,6 +3,25 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## P7 — Hardening
+
+- **Suspension enforcement**: suspended accounts fall through `resolveSocketUser` to anonymous
+  spectator (can't sit/chat/play) and are blocked from REST submissions. Chat-ban: connection
+  and play are normal, messages are silently dropped server-side.
+- **CSP is production-only** (`isProd`) — dev keeps it off so Vite HMR/inline works.
+  `style-src 'unsafe-inline'` is required by React/Framer inline styles; `frame-src` allows the
+  Google Maps embed; `connect-src` allows same-origin WS for Socket.IO. Verified the prod build
+  boots, serves the SPA shell on client routes, and ships the CSP header.
+- **Rate limits**: auth 30/min, submissions 15/min, profile 20/min, bonus 10/min (per-route
+  via `config.rateLimit`); global plugin registered with `global: false` so static/WS aren't
+  throttled. Socket actions keep their token bucket; chat its 3/4s window.
+- **Bundle split**: every route except Home is `React.lazy`; vendor split into react / motion /
+  realtime chunks. Largest initial payload ~73kB gzip (index) + 43kB (motion, used site-wide).
+  No Vite chunk-size warning.
+- **Hand-voided notice**: `voidHand` emits a `server:notice` (warning) rendered as a gold
+  banner; client `useTable` exposes `notice`.
+- **Secure cookies**: Better Auth `useSecureCookies` in production, sameSite=lax.
+
 ## P6 — Admin
 
 - **Session codes live only in the admin API** (`/api/admin/sessions`) — never in any public

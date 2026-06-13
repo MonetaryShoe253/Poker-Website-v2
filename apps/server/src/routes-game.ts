@@ -91,6 +91,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (!profile?.nickname) {
       return reply.code(403).send({ error: "Pick your nickname before submitting results." });
     }
+    if (profile.suspendedAt !== null) {
+      return reply.code(403).send({ error: "Your account is suspended — speak to the committee." });
+    }
 
     const parsed = (kind === "TOURNAMENT" ? TournamentSubmission : CashSubmission).safeParse(
       req.body,
@@ -162,10 +165,13 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     }
   };
 
-  app.post("/api/submissions/tournament", (req, reply) =>
+  const submitRateLimit = { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } };
+  app.post("/api/submissions/tournament", submitRateLimit, (req, reply) =>
     handleSubmission(req, reply, "TOURNAMENT"),
   );
-  app.post("/api/submissions/cash", (req, reply) => handleSubmission(req, reply, "CASH"));
+  app.post("/api/submissions/cash", submitRateLimit, (req, reply) =>
+    handleSubmission(req, reply, "CASH"),
+  );
 
   // --- Leaderboards ----------------------------------------------------------------
 
@@ -381,7 +387,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
   // --- Daily bonus -------------------------------------------------------------------
 
-  app.post("/api/bonus/claim", async (req, reply) => {
+  app.post("/api/bonus/claim", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const user = await verifiedUser(req);
     if (!user) return reply.code(401).send({ error: "Sign in first." });
     const profile = await prisma.profile.findUnique({ where: { userId: user.id } });

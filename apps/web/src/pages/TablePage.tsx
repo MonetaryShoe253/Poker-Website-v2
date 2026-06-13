@@ -387,7 +387,7 @@ function ActionDock({ state }: { state: TableStatePayload }) {
 
 export function TablePage() {
   usePageMeta("At the table", "Live No-Limit Hold'em at UOS Poker.");
-  const { state, chat, error } = useTable();
+  const { state, chat, error, notice } = useTable();
   const { me } = useMe();
   const [message, setMessage] = useState("");
   const [cheatSheet, setCheatSheet] = useState(false);
@@ -543,13 +543,27 @@ export function TablePage() {
       </div>
 
       {!connected && (
-        <div className="mt-2 rounded border border-ember bg-ember/10 px-3 py-2 text-sm text-ember">
+        <div
+          role="alert"
+          className="mt-2 rounded border border-ember bg-ember/10 px-3 py-2 text-sm text-ember"
+        >
           Connection lost — reconnecting…
         </div>
       )}
       {error && (
-        <div className="mt-2 rounded border border-ember bg-ember/10 px-3 py-2 text-sm text-ember">
+        <div
+          role="alert"
+          className="mt-2 rounded border border-ember bg-ember/10 px-3 py-2 text-sm text-ember"
+        >
           {error.message}
+        </div>
+      )}
+      {notice && (
+        <div
+          role="status"
+          className="mt-2 rounded border border-gold/50 bg-gold/10 px-3 py-2 text-sm text-gold"
+        >
+          {notice.message}
         </div>
       )}
       {state.sittingOut && (

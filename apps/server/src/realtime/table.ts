@@ -100,6 +100,7 @@ export interface Viewer {
   userId: string | null;
   emitState: (state: TableStatePayload) => void;
   emitEvent: (event: TableEventPayload) => void;
+  emitNotice?: (notice: { message: string; kind: "info" | "warning" }) => void;
 }
 
 interface ViewState {
@@ -932,7 +933,15 @@ export class Table {
     this.actionSeat = null;
     this.actionDeadline = null;
     this.pendingAction = null;
+    this.notifyAll({
+      message: "That hand was voided — chips returned to your stack. Dealing a fresh one.",
+      kind: "warning",
+    });
     this.broadcastState();
+  }
+
+  private notifyAll(notice: { message: string; kind: "info" | "warning" }): void {
+    for (const viewer of this.viewers.values()) viewer.emitNotice?.(notice);
   }
 
   // --- Housekeeping ----------------------------------------------------------------
