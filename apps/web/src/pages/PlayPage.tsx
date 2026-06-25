@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { SOCKET_EVENTS as EV, type BotTier } from "@uos-poker/shared";
-import { getNickname, getSocket, setNickname } from "../lib/socket";
+import {
+  clearCasualIdentity,
+  getNickname,
+  getSocket,
+  isGuest,
+  setGuestNickname,
+  setNickname,
+} from "../lib/socket";
 import { useLobby } from "../lib/useTable";
 import { useMe } from "../lib/useMe";
 
@@ -60,18 +67,27 @@ export function PlayPage() {
   const navigate = useNavigate();
   const { me, loading } = useMe();
 
-  // Real identity: a verified account with a nickname. The localStorage
-  // dev door survives only in dev builds.
+  // Real identity: a verified account with a nickname. A casual identity (no
+  // account) is the dev door in dev builds, or a production demo guest —
+  // guests are restricted server-side to practice tables + spectating.
   const authedNick = me?.user && me.profile?.nickname ? me.profile.nickname : null;
   const devDoorAllowed = import.meta.env.DEV;
-  const playableNick = authedNick ?? (devDoorAllowed ? savedNick : null);
+  const casualNick = !authedNick ? savedNick : null;
+  const playableNick = authedNick ?? casualNick;
+  const restrictedGuest = !authedNick && !!casualNick && !devDoorAllowed && isGuest();
 
   const saveNickname = () => {
     const trimmed = nickname.trim();
     if (/^[A-Za-z0-9_-]{3,16}$/.test(trimmed)) {
-      setNickname(trimmed);
+      if (devDoorAllowed) setNickname(trimmed);
+      else setGuestNickname(trimmed);
       setSavedNick(trimmed);
     }
+  };
+
+  const changeNickname = () => {
+    clearCasualIdentity();
+    setSavedNick(null);
   };
 
   const playNow = () => {
@@ -131,36 +147,54 @@ export function PlayPage() {
               Sign in
             </Link>
           </div>
-          {devDoorAllowed && (
-            <div className="mt-5 border-t border-line pt-4">
-              <p className="text-xs text-muted">Dev door (local only):</p>
-              <div className="mt-2 flex gap-2">
-                <input
-                  value={nickname}
-                  onChange={(e) => setNick(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && saveNickname()}
-                  className="rounded border border-steel bg-bg-0 px-3 py-2 text-sm text-text outline-none focus:border-ember"
-                  placeholder="Nickname"
-                />
-                <button
-                  onClick={saveNickname}
-                  className="rounded border border-steel px-3 py-1 font-display text-sm hover:border-ember"
-                >
-                  Use
-                </button>
-              </div>
+          <div className="mt-5 border-t border-line pt-4">
+            <p className="text-xs text-muted">
+              {devDoorAllowed
+                ? "Dev door (local only):"
+                : "Just exploring? Try a guest seat — practice tables vs bots, no account:"}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={nickname}
+                onChange={(e) => setNick(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveNickname()}
+                className="rounded border border-steel bg-bg-0 px-3 py-2 text-sm text-text outline-none focus:border-ember"
+                placeholder="Nickname"
+                aria-label="Guest nickname"
+              />
+              <button
+                onClick={saveNickname}
+                className="rounded border border-steel px-3 py-1 font-display text-sm hover:border-ember hover:text-ember"
+              >
+                {devDoorAllowed ? "Use" : "Play as guest"}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       ) : (
         <>
+          {restrictedGuest && (
+            <div className="panel-steel mt-6 rounded-lg border-l-2 border-l-ember p-4">
+              <p className="text-sm text-text">
+                You're exploring as a guest — practice tables vs bots only.
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                <Link to="/auth?mode=signup" className="text-ember underline">
+                  Create an account
+                </Link>{" "}
+                for ranked seats, a saved bankroll, and a spot on the leaderboards.
+              </p>
+            </div>
+          )}
           <div className="mt-6 flex flex-wrap items-center gap-4">
-            <button
-              onClick={playNow}
-              className="rounded bg-ember-deep px-6 py-3 font-display text-lg tracking-wide text-white shadow-ember hover:bg-ember"
-            >
-              Play now
-            </button>
+            {!restrictedGuest && (
+              <button
+                onClick={playNow}
+                className="rounded bg-ember-deep px-6 py-3 font-display text-lg tracking-wide text-white shadow-ember hover:bg-ember"
+              >
+                Play now
+              </button>
+            )}
             <div className="panel-steel flex items-center gap-2 rounded px-3 py-2">
               <span className="text-sm text-muted">Practice vs</span>
               <select
@@ -186,7 +220,7 @@ export function PlayPage() {
               {!authedNick && (
                 <>
                   {" "}
-                  <button className="underline" onClick={() => setSavedNick(null)}>
+                  <button className="underline" onClick={changeNickname}>
                     change
                   </button>
                 </>
@@ -215,7 +249,7 @@ export function PlayPage() {
                     >
                       Spectate
                     </button>
-                    {table.seatsFree > 0 && (
+                    {!restrictedGuest && table.seatsFree > 0 && (
                       <button
                         onClick={() => {
                           getSocket().emit(EV.sitDown, { tableId: table.tableId, buyIn: 10000 });

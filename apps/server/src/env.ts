@@ -26,3 +26,41 @@ const EnvSchema = z.object({
 
 export const env = EnvSchema.parse(process.env);
 export const isProd = env.NODE_ENV === "production";
+
+/**
+ * Fail-loud production guard. The schema above carries dev-friendly defaults so
+ * local/test boots are frictionless — but those defaults are dangerous in
+ * production (a known auth secret allows session forgery; localhost URLs break
+ * auth/CORS). Refuse to start rather than boot insecurely or half-working.
+ */
+if (isProd) {
+  const problems: string[] = [];
+  const DEV_SECRET_DEFAULT = "dev-secret-change-me";
+  const looksLocal = (url: string | undefined) =>
+    !url || /localhost|127\.0\.0\.1|0\.0\.0\.0/.test(url) || !/^https?:\/\//.test(url);
+
+  if (!env.BETTER_AUTH_SECRET || env.BETTER_AUTH_SECRET === DEV_SECRET_DEFAULT) {
+    problems.push(
+      'BETTER_AUTH_SECRET is missing or set to the insecure default. Generate one: node -e "console.log(crypto.randomBytes(32).toString(\'hex\'))"',
+    );
+  } else if (env.BETTER_AUTH_SECRET.length < 32) {
+    problems.push("BETTER_AUTH_SECRET is too short — use at least 32 characters of entropy.");
+  }
+  if (looksLocal(env.SITE_URL)) {
+    problems.push(`SITE_URL must be your public https URL (got: ${env.SITE_URL || "unset"}).`);
+  }
+  if (looksLocal(env.BETTER_AUTH_URL)) {
+    problems.push(
+      `BETTER_AUTH_URL must be your public https URL (got: ${env.BETTER_AUTH_URL || "unset"}).`,
+    );
+  }
+
+  if (problems.length > 0) {
+    console.error(
+      "\n[FATAL] Refusing to start in production with insecure configuration:\n" +
+        problems.map((p) => `  • ${p}`).join("\n") +
+        "\n\nSet these environment variables on the deployment service and redeploy.\n",
+    );
+    process.exit(1);
+  }
+}

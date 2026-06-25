@@ -1,7 +1,12 @@
 import { buildServer } from "./server";
 import { attachRealtime, type HandshakeInfo } from "./realtime/sockets";
 import { DEFAULT_TIMING, type TableTiming } from "./realtime/table";
-import { devResolveUser, hydrateBankroll, type UserCtx } from "./realtime/users";
+import {
+  devResolveUser,
+  guestResolveUser,
+  hydrateBankroll,
+  type UserCtx,
+} from "./realtime/users";
 import { sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { env, isProd } from "./env";
@@ -14,8 +19,10 @@ const app = await buildServer();
 
 /**
  * Socket identity: authenticated session first (verified email + completed
- * nickname onboarding required to play); dev nickname door as a non-prod
- * fallback so local play and E2E stay frictionless.
+ * nickname onboarding required for rated play). Failing that: the dev nickname
+ * door (non-prod only, full access) or the production guest door (opt-in demo
+ * identity restricted to practice + spectating). A bare unauthenticated socket
+ * resolves to an anonymous spectator.
  */
 async function resolveSocketUser(handshake: HandshakeInfo): Promise<UserCtx | null> {
   try {
@@ -40,7 +47,9 @@ async function resolveSocketUser(handshake: HandshakeInfo): Promise<UserCtx | nu
     app.log.warn({ err }, "socket session resolution failed");
   }
   if (!isProd) return devResolveUser(handshake.auth);
-  return null;
+  const guest = guestResolveUser(handshake.auth);
+  if (guest) await hydrateBankroll(guest.userId);
+  return guest;
 }
 
 /** UOS_FAST_TABLES=1 shortens all table clocks — dev & E2E only. */

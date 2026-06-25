@@ -3,6 +3,27 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## P9 — Launch review (hardening + portfolio polish)
+
+- **Fail-loud production env guard** (`env.ts`): in `NODE_ENV=production` the server now
+  refuses to boot (exit 1, explicit message) if `BETTER_AUTH_SECRET` is missing/the dev
+  default/under 32 chars, or `SITE_URL`/`BETTER_AUTH_URL` are missing or localhost. The schema
+  keeps dev-friendly defaults; the guard stops them shipping. `process.loadEnvFile` does **not**
+  override real env vars, so Railway's injected values always win.
+- **Production guest demo door**: an opt-in ephemeral identity (`guest:` prefix, `isGuest`
+  flag) for portfolio/demo visitors. The client sends `auth: { nickname, guest: true }`; the
+  server's `guestResolveUser` requires the explicit flag (a bare nickname stays an anonymous
+  spectator). Guests are sandboxed server-side to **practice tables + spectating** —
+  `playNow`/`sitDown` reject them via `requireRatedPlayer`, so rated Elo and signed-in players'
+  bankrolls are untouched. No DB identity, no persistence (`isEphemeralUser` covers `dev:` and
+  `guest:`). Restricted in two places (server enforces; client hides Play-now/Take-a-seat),
+  with the server as source of truth. Covered by `test/guest.test.ts`.
+- **CSP**: dropped bare `ws:` from the prod `connect-src` (kept `wss:`) so production never
+  permits insecure sockets.
+- **Favicon + SEO**: added an ember-spade `favicon.svg` (reuses the wordmark glyph) and
+  `robots.txt`; expanded OG/Twitter meta. `og:url`/canonical deferred — they need the final
+  domain (set once chosen).
+
 ## P8 — Deploy
 
 - **Runtime uses tsx** (`node --import tsx src/index.ts`), not a compiled build: the workspace

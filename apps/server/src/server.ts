@@ -34,7 +34,9 @@ export async function buildServer() {
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
             fontSrc: ["'self'", "data:"],
-            connectSrc: ["'self'", "ws:", "wss:"],
+            // Same-origin REST + Socket.IO. Over HTTPS the upgrade is wss:;
+            // bare ws: is omitted so prod never permits insecure sockets.
+            connectSrc: ["'self'", "wss:"],
             frameSrc: ["https://www.google.com", "https://maps.google.com"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],

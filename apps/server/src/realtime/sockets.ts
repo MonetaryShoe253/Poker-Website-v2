@@ -97,6 +97,22 @@ export function attachRealtime(
       }
       return ctx.user;
     };
+    // Public rated tables (playNow / sitDown) need a real account: guests are
+    // sandboxed to practice + spectating so they never touch rated Elo or the
+    // bankrolls of signed-in players.
+    const requireRatedPlayer = (): UserCtx | null => {
+      const user = requireAuth();
+      if (!user) return null;
+      if (user.isGuest) {
+        sendError({
+          code: "NOT_AUTHENTICATED",
+          message:
+            "Guests play practice tables only — sign up for ranked seats, a bankroll, and the leaderboards.",
+        });
+        return null;
+      }
+      return user;
+    };
     const takeActionToken = (): boolean => {
       const now = Date.now();
       ctx.actionTokens = Math.min(10, ctx.actionTokens + ((now - ctx.lastActionRefill) / 1000) * 5);
@@ -152,7 +168,7 @@ export function attachRealtime(
     socket.on(EV.leaveTable, () => leaveCurrentTable());
 
     socket.on(EV.playNow, () => {
-      const user = requireAuth();
+      const user = requireRatedPlayer();
       if (!user) return;
       const table = lobby.playNowTarget();
       watchTable(table);
@@ -188,7 +204,7 @@ export function attachRealtime(
     });
 
     socket.on(EV.sitDown, (raw: unknown) => {
-      const user = requireAuth();
+      const user = requireRatedPlayer();
       if (!user) return;
       const parsed = SitDownSchema.safeParse(raw);
       if (!parsed.success) {

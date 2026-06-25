@@ -17,16 +17,24 @@ export interface UserCtx {
   showLosing?: boolean;
   /** Chat-banned by an admin: connection is fine, messages are dropped. */
   chatBanned?: boolean;
+  /**
+   * Ephemeral demo visitor (production "try as guest"): may spectate and play
+   * practice (bot, unrated) tables, but never the public rated tables. No DB
+   * identity, no persistence — same restrictions enforced server-side.
+   */
+  isGuest?: boolean;
 }
 
 const cache = new Map<string, number>();
 const writeQueue = new Map<string, Promise<void>>();
 
-const isDevUser = (userId: string) => userId.startsWith("dev:");
+/** Ephemeral identities (dev door + production guests) never touch the DB. */
+const isEphemeralUser = (userId: string) =>
+  userId.startsWith("dev:") || userId.startsWith("guest:");
 
 /** Load (or refresh) a user's bankroll into the cache. Call at connect. */
 export async function hydrateBankroll(userId: string): Promise<number> {
-  if (isDevUser(userId)) {
+  if (isEphemeralUser(userId)) {
     if (!cache.has(userId)) cache.set(userId, BANKROLL.starting);
     return cache.get(userId)!;
   }
@@ -50,7 +58,7 @@ export function adjustBankroll(userId: string, delta: number): number {
 }
 
 function persist(userId: string, value: number): void {
-  if (isDevUser(userId)) return;
+  if (isEphemeralUser(userId)) return;
   const prev = writeQueue.get(userId) ?? Promise.resolve();
   writeQueue.set(
     userId,
@@ -77,5 +85,24 @@ export function devResolveUser(auth: Record<string, unknown> | undefined): UserC
     userId: `dev:${nickname.toLowerCase()}`,
     nickname,
     avatarId: "spade-ember",
+  };
+}
+
+/**
+ * Production guest door: an explicit, opt-in demo identity. The client must
+ * send `guest: true` alongside a valid nickname — a plain nickname (no flag)
+ * is ignored so an unauthenticated socket never silently becomes a player.
+ * Guests are flagged so the realtime layer can restrict them to practice and
+ * spectating; they carry an ephemeral `guest:` userId that never persists.
+ */
+export function guestResolveUser(auth: Record<string, unknown> | undefined): UserCtx | null {
+  if (auth?.guest !== true) return null;
+  const nickname = typeof auth?.nickname === "string" ? auth.nickname.trim() : "";
+  if (!/^[A-Za-z0-9_-]{3,16}$/.test(nickname)) return null;
+  return {
+    userId: `guest:${nickname.toLowerCase()}`,
+    nickname,
+    avatarId: "spade-ember",
+    isGuest: true,
   };
 }

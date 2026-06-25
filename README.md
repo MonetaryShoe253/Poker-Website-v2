@@ -50,6 +50,12 @@ In development you can play immediately via the **dev door** on the lobby (pick 
 no account needed). Email verification links are captured in an in-memory mailbox at
 `GET /api/dev/mailbox?to=<email>` instead of being sent.
 
+In **production** visitors can also "Play as guest" from the lobby — an ephemeral identity
+(no account) sandboxed to **practice tables vs bots + spectating**. Rated play, a saved
+bankroll, and the leaderboards still require a verified account. This keeps the live demo
+one click away for portfolio/society visitors without exposing rated tables to throwaway
+identities.
+
 ### Useful commands
 
 ```bash
@@ -85,7 +91,10 @@ Copy `.env.example` to `.env` for local dev; set the same keys in Railway for pr
 1. **Domain** — buy one, then set `SITE_URL`, `BETTER_AUTH_URL`, and the `EMAIL_FROM` domain.
 2. **Railway** — create a project, add the **Postgres** plugin, connect this GitHub repo.
    Railway builds from the `Dockerfile`; `start:prod` runs `prisma migrate deploy` then boots.
-   Set all env vars above in the service.
+   Set all env vars above in the service. In production the server **refuses to start** unless
+   `BETTER_AUTH_SECRET` is a real 32+ char secret and `SITE_URL`/`BETTER_AUTH_URL` are public
+   https URLs — it prints exactly what's missing and exits, so a misconfigured deploy fails
+   loudly instead of booting insecurely.
 3. **Resend** — create an account + API key (`RESEND_API_KEY`). Add your sending domain in the
    Resend dashboard, then add the DNS records **the server prints on first production boot**
    (SPF + DMARC are printed in full; copy the DKIM value from the Resend dashboard). Verify the
