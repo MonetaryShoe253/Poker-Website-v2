@@ -130,7 +130,7 @@ export function HomePage() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7, ease: "easeOut" }}
           >
-            <SpadeGlyph size={84} />
+            <SpadeGlyph size={200} className="h-40 w-40 sm:h-52 sm:w-52" />
           </motion.div>
           <motion.h1
             className="mt-6 font-display text-4xl font-bold tracking-[0.14em] sm:text-6xl"

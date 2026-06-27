@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(pnpm --filter @uos-poker/engine test 2>&1)"
+      "PowerShell(pnpm --filter @uos-poker/engine test 2>&1)",
+      "Bash(timeout 300 pnpm typecheck)",
+      "Bash(timeout 400 pnpm test)",
+      "Bash(timeout 180 pnpm lint)",
+      "Bash(timeout 300 pnpm build)",
+      "Bash(grep -E \"\\\\.env$\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const b=fs.readFileSync\\('apps/web/public/Logo.png'\\);const w=b.readUInt32BE\\(16\\),h=b.readUInt32BE\\(20\\);console.log\\('Logo.png',w+'x'+h, 'ratio', \\(w/h\\).toFixed\\(3\\)\\);\")",
+      "Bash(certutil -hashfile \"Logo.png\" SHA1)",
+      "Bash(certutil -hashfile \"apps/web/public/Logo.png\" SHA1)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

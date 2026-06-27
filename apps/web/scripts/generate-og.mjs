@@ -3,8 +3,14 @@
  * using Playwright's bundled Chromium. Run: node scripts/generate-og.mjs
  */
 import { chromium } from "@playwright/test";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const logoDataUri = `data:image/png;base64,${fs
+  .readFileSync(path.resolve(here, "../public/Logo.png"))
+  .toString("base64")}`;
 
 const html = `<!doctype html>
 <html><head><style>
@@ -22,11 +28,8 @@ const html = `<!doctype html>
     background: linear-gradient(90deg, transparent, #FF2D40 18%, #FF2D40 82%, transparent);
     box-shadow: 0 0 18px 2px rgba(255,45,64,.5);
   }
-  .spade { font-size: 120px; color: #2A2F36; text-shadow: 0 1px 0 rgba(255,255,255,.06); position: relative; }
-  .spade::after {
-    content: "♠"; position: absolute; inset: 0; color: transparent;
-    -webkit-text-stroke: 2px rgba(255,45,64,.85); transform: scale(.62) translateY(-6px);
-  }
+  .logo { width: 200px; height: 200px; object-fit: contain;
+    filter: drop-shadow(0 0 24px rgba(255,45,64,.35)); }
   h1 { margin-top: 12px; font-size: 88px; letter-spacing: 22px; color: #D7DCE3; font-weight: 700; }
   h1 b { color: #FF2D40; font-weight: 700; }
   p { margin-top: 18px; font-size: 28px; letter-spacing: 6px; color: #8B93A1; text-transform: uppercase; }
@@ -38,14 +41,13 @@ const html = `<!doctype html>
 <body>
   <div class="card">
     <div class="rail"></div>
-    <div class="spade">♠</div>
+    <img class="logo" src="${logoDataUri}" alt="" />
     <h1>UOS <b>POKER</b></h1>
     <p>University of Sheffield Poker Society</p>
     <div class="rail2"></div>
   </div>
 </body></html>`;
 
-const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, "../public/og.png");
 
 const browser = await chromium.launch();

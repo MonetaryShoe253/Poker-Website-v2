@@ -105,17 +105,6 @@ export function Layout() {
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-sm text-muted">
           <p>Play-money only — no real-money gambling on this site.</p>
           <p>
-            Worried about gambling?{" "}
-            <a
-              href="https://www.begambleaware.org"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-text"
-            >
-              BeGambleAware.org
-            </a>
-          </p>
-          <p>
             <a
               href="https://www.instagram.com/pokersoc_sheffield/"
               target="_blank"

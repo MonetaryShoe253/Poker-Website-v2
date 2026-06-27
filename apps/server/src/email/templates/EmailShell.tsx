@@ -76,10 +76,6 @@ export function EmailShell({ preview, children }: { preview: string; children: R
               University of Sheffield Poker Society
               <br />
               Play-money only — no real-money gambling on this site.
-              <br />
-              <a href="https://www.begambleaware.org" style={{ color: palette.muted }}>
-                BeGambleAware.org
-              </a>
             </Text>
           </Section>
         </Container>
