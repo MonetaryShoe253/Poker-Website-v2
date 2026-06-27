@@ -4,6 +4,7 @@
   "type": "module",
   "version": "0.1.0",
   "description": "UOS Poker — University of Sheffield Poker Society. Society home, leaderboards, and a play-money online poker room.",
+  "license": "MIT",
   "engines": {
     "node": ">=22"
   },
