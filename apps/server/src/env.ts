@@ -54,6 +54,19 @@ if (isProd) {
       `BETTER_AUTH_URL must be your public https URL (got: ${env.BETTER_AUTH_URL || "unset"}).`,
     );
   }
+  // Email verification is mandatory, so email sign-up is dead without a working
+  // Resend config — refuse to boot half-working rather than fail silently later.
+  if (!env.RESEND_API_KEY) {
+    problems.push(
+      "RESEND_API_KEY is not set — verification/reset emails cannot send. Create a key at https://resend.com/api-keys.",
+    );
+  }
+  const fromDomain = env.EMAIL_FROM.match(/@([^>\s]+)/)?.[1];
+  if (!fromDomain || fromDomain === "example.com" || fromDomain.endsWith(".example")) {
+    problems.push(
+      `EMAIL_FROM is unset or still a placeholder (got: ${env.EMAIL_FROM}). Set it to a verified Resend sending domain, e.g. "UOS Poker <noreply@uospoker.co.uk>".`,
+    );
+  }
 
   if (problems.length > 0) {
     console.error(

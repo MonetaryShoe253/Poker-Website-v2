@@ -7,6 +7,11 @@ import { env, isProd } from "../env";
  * to it rather than fabricate one. SPF/DMARC are standard and printed in full.
  */
 export function printResendDnsRecords(): void {
+  if (isProd) {
+    console.log(
+      `[email] transport: ${env.RESEND_API_KEY ? "Resend" : "NONE (RESEND_API_KEY unset)"}, from: ${env.EMAIL_FROM}`,
+    );
+  }
   // Domain from EMAIL_FROM ("UOS Poker <noreply@uospoker.example>") or env.
   const fromMatch = env.EMAIL_FROM.match(/@([^>\s]+)/);
   const domain = fromMatch?.[1];

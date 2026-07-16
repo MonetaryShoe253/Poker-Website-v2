@@ -39,13 +39,17 @@ export async function sendEmail(opts: {
       html,
     });
     if (error) {
-      console.error(`Email to ${opts.to} failed:`, error);
+      // Most common causes: sending domain not verified in Resend, EMAIL_FROM
+      // not on that domain, or an API key restricted to another domain.
+      console.error(`[email] Resend rejected "${opts.subject}" to ${opts.to}:`, error);
+      throw new Error(`Email could not be sent (${error.name ?? "resend_error"}).`);
     }
     return;
   }
   if (isProd) {
-    console.error("RESEND_API_KEY missing in production — email not sent:", opts.subject);
-    return;
+    // Unreachable when the env guard is active; kept as a fail-loud backstop.
+    console.error("[email] RESEND_API_KEY missing in production — email not sent:", opts.subject);
+    throw new Error("Email is not configured on this server.");
   }
   devMailbox.push({ to: opts.to, subject: opts.subject, html, at: Date.now() });
   if (devMailbox.length > 200) devMailbox.shift();
