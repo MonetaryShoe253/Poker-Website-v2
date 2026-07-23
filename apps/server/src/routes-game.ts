@@ -5,11 +5,7 @@ import { sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { isProd } from "./env";
 import { adjustBankroll, hydrateBankroll } from "./realtime/users";
-import {
-  ensureActiveSeason,
-  generateSessionCode,
-  pointsForPosition,
-} from "./services/seasons";
+import { ensureActiveSeason, generateSessionCode } from "./services/seasons";
 import { calculateTournamentPoints, getTournamentFormula } from "./services/tournament";
 import { addLondonDays, londonMidnight, londonParts, londonToUtc } from "./time";
 
@@ -64,7 +60,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       });
       // No codes here, ever — codes live in the admin panel only.
       return sessions.map((s) => ({ id: s.id, type: s.type, date: s.date }));
-    } catch (err) {
+    } catch {
       return [];
     }
   });

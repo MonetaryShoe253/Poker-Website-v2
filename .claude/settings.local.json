@@ -13,7 +13,11 @@
       "Bash(certutil -hashfile \"apps/web/public/Logo.png\" SHA1)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(pnpm --filter @uos-poker/server db:generate)",
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm test *)"
     ]
   }
 }

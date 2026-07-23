@@ -11,9 +11,6 @@ import path from "node:path";
 import fs from "node:fs";
 
 const shellExecutable = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "/bin/sh";
-const shellArgs = process.platform === "win32"
-  ? ["/d", "/s", "/c", "pnpm --filter @uos-poker/server db:generate"]
-  : ["-lc", "pnpm --filter @uos-poker/server db:generate"];
 
 function runPrismaCommand(command: string): void {
   const args = process.platform === "win32"
@@ -77,11 +74,6 @@ await pg.start();
 if (firstRun) {
   await pg.createDatabase("uospoker");
 }
-
-const prismaEnv = {
-  ...process.env,
-  DATABASE_URL: dbUrl,
-};
 
 console.log("Applying Prisma migrations…");
 runPrismaCommand("db:generate");
