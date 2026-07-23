@@ -850,8 +850,8 @@ export class Table {
             if (player) {
               this.handLog.push(
                 payout.handName
-                  ? `#${this.handNo} — ${player.nickname} wins ${payout.amount.toLocaleString()} with ${payout.handName.toLowerCase()}`
-                  : `#${this.handNo} — ${player.nickname} wins ${payout.amount.toLocaleString()}`,
+                  ? `#${this.handNo}: ${player.nickname} wins ${payout.amount.toLocaleString()} with ${payout.handName.toLowerCase()}`
+                  : `#${this.handNo}: ${player.nickname} wins ${payout.amount.toLocaleString()}`,
               );
             }
           }
@@ -934,7 +934,7 @@ export class Table {
     this.actionDeadline = null;
     this.pendingAction = null;
     this.notifyAll({
-      message: "That hand was voided — chips returned to your stack. Dealing a fresh one.",
+      message: "That hand was voided. Chips returned to your stack. Dealing a fresh one.",
       kind: "warning",
     });
     this.broadcastState();

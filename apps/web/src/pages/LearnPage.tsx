@@ -28,13 +28,13 @@ const SAMPLE_STEPS = [
     board: [] as string[],
     you: ["Ah", "Kh"],
     caption:
-      "You're dealt two private cards — your hole cards. Ace-king of hearts: a strong start.",
+      "You're dealt two private cards, your hole cards. Ace-king of hearts: a strong start.",
   },
   {
     board: ["Qh", "7c", "2h"],
     you: ["Ah", "Kh"],
     caption:
-      "The flop: three shared cards everyone can use. You have two hearts in hand, two on the board — two more chances to hit a flush.",
+      "The flop: three shared cards everyone can use. You have two hearts in hand, two on the board, two more chances to hit a flush.",
   },
   {
     board: ["Qh", "7c", "2h", "9d"],
@@ -45,7 +45,7 @@ const SAMPLE_STEPS = [
     board: ["Qh", "7c", "2h", "9d", "4h"],
     you: ["Ah", "Kh"],
     caption:
-      "The river: the 4♥ completes your flush — five hearts using your two and the board's three. That's a strong hand: bet it.",
+      "The river: the 4♥ completes your flush, five hearts using your two and the board's three. That's a strong hand: bet it.",
   },
 ];
 
@@ -141,7 +141,7 @@ export function LearnPage() {
         <SectionTitle kicker="Learn poker">From zero to dealt in</SectionTitle>
         <p className="mt-2 max-w-2xl text-muted">
           Five short chapters. Read them in order, or jump around. By the end you can sit down
-          on a Tuesday — or at an online table — and know exactly what's happening.
+          on a Tuesday (or at an online table) and know exactly what's happening.
         </p>
       </Reveal>
 
@@ -173,7 +173,7 @@ export function LearnPage() {
             Texas Hold'em deals everyone <Term>two private cards</Term>, then turns up{" "}
             <Term>five shared cards</Term> in the middle. You make the best five-card hand from
             any combination of your two and the board's five. Between each reveal there's a
-            round of betting — and that's where the game actually lives, because you don't
+            round of betting. That's where the game actually lives, because you don't
             have to show your cards to win. If everyone else folds, the pot's yours.
           </P>
           <H>The flow of a hand</H>
@@ -190,7 +190,7 @@ export function LearnPage() {
         <Chapter index={1} active={chapter}>
           <H>What beats what</H>
           <P>
-            Memorise the ladder below — it's the same in every poker game on earth. Rarer beats
+            Memorise the ladder below: it's the same in every poker game on earth. Rarer beats
             commoner. When two players have the same type of hand, the higher cards inside it
             win (a king-high flush beats a nine-high flush).
           </P>
@@ -213,8 +213,8 @@ export function LearnPage() {
           <H>Pot odds, in plain English</H>
           <P>
             Every call is a price. If the pot is 900 and someone bets 100, you're paying 100 to
-            win 1,000 — ten-to-one. Even a long-shot draw is worth that. If the pot is 200 and
-            the bet is 400, you're paying 400 to win 600 — now you need a strong hand or a
+            win 1,000, ten-to-one. Even a long-shot draw is worth that. If the pot is 200 and
+            the bet is 400, you're paying 400 to win 600. Now you need a strong hand or a
             great draw. You don't need maths at the table; just ask{" "}
             <Term>"is this cheap or expensive for what I'm holding?"</Term>
           </P>
@@ -230,7 +230,7 @@ export function LearnPage() {
           <H>Why the dealer button matters</H>
           <P>
             Betting goes clockwise, so the player on the <Term>button</Term> (the dealer
-            position) acts <Term>last</Term> after the flop — they've seen what everyone else
+            position) acts <Term>last</Term> after the flop: they've seen what everyone else
             did before deciding. Acting last is a genuine advantage, every single hand. The
             button moves one seat each hand so everyone gets their turn.
           </P>
@@ -238,8 +238,8 @@ export function LearnPage() {
           <P>
             <Term>Play from any seat:</Term> big pairs (AA–99) and big cards (AK, AQ, KQ).{" "}
             <Term>Play late, near the button:</Term> medium pairs, suited connectors like 9♠8♠,
-            ace-with-anything suited. <Term>Fold almost everywhere:</Term> the random junk —
-            J3, 92, Q4 — that makes up most of what you're dealt. When in doubt early in the
+            ace-with-anything suited. <Term>Fold almost everywhere:</Term> the random junk
+            (J3, 92, Q4) that makes up most of what you're dealt. When in doubt early in the
             night: tight from early seats, braver on the button.
           </P>
           <div className="flex flex-wrap items-center gap-4 rounded border border-line p-4">
@@ -265,7 +265,7 @@ export function LearnPage() {
         <Chapter index={4} active={chapter}>
           <H>At the society (in person)</H>
           <P>
-            Act in turn — wait for the player on your right. Keep your cards on the table and
+            Act in turn: wait for the player on your right. Keep your cards on the table and
             your big reactions for after the hand. Don't comment on a hand you've folded out
             of ("I folded a king!" changes the game for the people still in it). Stack your
             chips so others can see roughly what you have. And be kind to beginners; everyone
@@ -273,7 +273,7 @@ export function LearnPage() {
           </P>
           <H>Online, here</H>
           <P>
-            The clock is 20 seconds with a spare time bank — act promptly and nobody waits.
+            The clock is 20 seconds with a spare time bank: act promptly and nobody waits.
             Chat is for table talk, not abuse; the filter is robust and the committee can mute.
             Don't discuss live hands in chat while others are still acting. Losing hands muck
             automatically, so nobody sees your bluffs unless you choose to show.
@@ -288,7 +288,7 @@ export function LearnPage() {
               to="/play"
               className="rounded bg-ember-deep px-5 py-2.5 font-display text-sm tracking-wide text-white shadow-ember hover:bg-ember"
             >
-              You're ready — deal me in
+              You're ready, deal me in
             </Link>
             <Link
               to="/sessions"

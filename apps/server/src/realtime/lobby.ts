@@ -61,7 +61,7 @@ export class Lobby {
 
   createPracticeTable(ownerUserId: string, tier: BotTier, botCount: number): Table {
     const table = this.spawn({
-      name: `Practice — ${tier.charAt(0)}${tier.slice(1).toLowerCase()}`,
+      name: `Practice · ${tier.charAt(0)}${tier.slice(1).toLowerCase()}`,
       isPractice: true,
       ownerUserId,
     });

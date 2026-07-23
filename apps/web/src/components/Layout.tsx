@@ -103,7 +103,7 @@ export function Layout() {
 
       <footer className="border-t border-line bg-bg-1">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-6 text-sm text-muted">
-          <p>Play-money only — no real-money gambling on this site.</p>
+          <p>Play-money only. No real-money gambling on this site.</p>
           <p>
             <a
               href="https://www.instagram.com/pokersoc_sheffield/"

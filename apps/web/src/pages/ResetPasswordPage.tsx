@@ -20,14 +20,14 @@ export function ResetPasswordPage() {
       email,
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) setError(error.message ?? "Couldn't send the email — try again.");
+    if (error) setError(error.message ?? "Couldn't send the email. Try again.");
     else setDone(true);
   };
 
   const confirm = async () => {
     setError(null);
     const { error } = await authClient.resetPassword({ newPassword: password, token: token! });
-    if (error) setError(error.message ?? "That link has expired — request a fresh one.");
+    if (error) setError(error.message ?? "That link has expired. Request a fresh one.");
     else navigate("/auth");
   };
 

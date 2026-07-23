@@ -11,7 +11,7 @@ export function PasswordResetEmail({ name, url }: { name: string; url: string })
       </Text>
       <EmberButton href={url}>RESET PASSWORD</EmberButton>
       <Text style={mutedText}>
-        The link expires in an hour. If this wasn't you, you can ignore it — your password
+        The link expires in an hour. If this wasn't you, you can ignore it. Your password
         stays as it was.
       </Text>
     </EmailShell>

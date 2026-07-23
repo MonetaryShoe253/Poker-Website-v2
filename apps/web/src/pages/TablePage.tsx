@@ -219,7 +219,7 @@ function Board({
     const seat = state.winningSeats[0]!;
     const name = state.seats[seat]?.nickname ?? "";
     const handName = state.shownHandNames[seat];
-    return handName ? `${name} wins — ${handName}` : `${name} wins the pot`;
+    return handName ? `${name} wins: ${handName}` : `${name} wins the pot`;
   })();
 
   return (
@@ -340,7 +340,7 @@ function ActionDock({ state }: { state: TableStatePayload }) {
           <button
             onClick={() => {
               const clamped = Math.min(range.maxTo, Math.max(range.minTo, Math.round(raiseTo)));
-              if (clamped === range.maxTo && !window.confirm("All in — are you sure?")) return;
+              if (clamped === range.maxTo && !window.confirm("All in. Are you sure?")) return;
               send(legal.raise ? "RAISE" : "BET", clamped);
             }}
             className="min-w-28 rounded bg-ember-deep px-4 py-2.5 font-display text-sm text-white hover:bg-ember"
@@ -467,7 +467,7 @@ export function TablePage() {
   if (!state) {
     return (
       <section className="mx-auto max-w-4xl px-4 py-16 text-center text-muted">
-        <p>No table in view — head to the lobby.</p>
+        <p>No table in view. Head to the lobby.</p>
         <button
           onClick={() => navigate("/play")}
           className="mt-4 rounded bg-ember-deep px-4 py-2 font-display text-sm text-white"
@@ -547,7 +547,7 @@ export function TablePage() {
           role="alert"
           className="mt-2 rounded border border-ember bg-ember/10 px-3 py-2 text-sm text-ember"
         >
-          Connection lost — reconnecting…
+          Connection lost. Reconnecting…
         </div>
       )}
       {error && (
@@ -568,7 +568,7 @@ export function TablePage() {
       )}
       {state.sittingOut && (
         <div className="mt-2 flex items-center gap-3 rounded border border-line bg-bg-1 px-3 py-2 text-sm">
-          <span className="text-muted">You're sitting out — blinds are skipping you.</span>
+          <span className="text-muted">You're sitting out. Blinds are skipping you.</span>
           <button
             onClick={() => getSocket().emit(EV.imBack)}
             className="rounded bg-ember-deep px-3 py-1 font-display text-xs text-white hover:bg-ember"

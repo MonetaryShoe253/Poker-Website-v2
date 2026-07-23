@@ -60,7 +60,7 @@ function Dashboard() {
       <ul className="mt-2 space-y-1 text-xs text-muted">
         {data.recentActions.map((a, i) => (
           <li key={i}>
-            <span className="text-text">{a.action}</span> — {a.actor} ·{" "}
+            <span className="text-text">{a.action}</span> · {a.actor} ·{" "}
             {new Date(a.at).toLocaleString("en-GB")}
           </li>
         ))}
@@ -293,7 +293,7 @@ function Scheme() {
     void api<{ recomputed: number }>(`/api/admin/points-scheme/${seasonId}`, {
       method: "PUT",
       body: JSON.stringify({ positions, participation }),
-    }).then(({ recomputed }) => setStatus(`Saved — ${recomputed} submissions recomputed.`));
+    }).then(({ recomputed }) => setStatus(`Saved. ${recomputed} submissions recomputed.`));
 
   return (
     <div className="max-w-md">

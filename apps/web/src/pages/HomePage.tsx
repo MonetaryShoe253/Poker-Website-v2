@@ -30,7 +30,7 @@ function Countdown({ to }: { to: Date }) {
   if (ms === 0) {
     return (
       <p className="font-display text-xl tracking-[0.18em] text-ember">
-        ON RIGHT NOW — 'TIL 20:00
+        ON RIGHT NOW · 'TIL 20:00
       </p>
     );
   }
@@ -78,7 +78,7 @@ function particles(count: number) {
 export function HomePage() {
   usePageMeta(
     "",
-    "The University of Sheffield Poker Society — Tuesday tournaments, Thursday cash games, leaderboards, and a play-money online poker room.",
+    "The University of Sheffield Poker Society: Tuesday tournaments, Thursday cash games, leaderboards, and a play-money online poker room.",
   );
 
   const [upcoming, setUpcoming] = useState<UpcomingSession[]>([]);
@@ -146,7 +146,7 @@ export function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
           >
-            Sheffield's student card room. Real tables on campus twice a week — and an online
+            Sheffield's student card room. Real tables on campus twice a week, plus an online
             room that never closes.
           </motion.p>
 
@@ -158,7 +158,7 @@ export function HomePage() {
               transition={{ delay: 0.45 }}
             >
               <p className="mb-3 font-display text-xs uppercase tracking-[0.3em] text-muted">
-                Next session — {next.type === "TOURNAMENT" ? "Tournament" : "Cash game"} ·{" "}
+                Next session: {next.type === "TOURNAMENT" ? "Tournament" : "Cash game"} ·{" "}
                 {new Date(next.date).toLocaleDateString("en-GB", {
                   weekday: "long",
                   day: "numeric",
@@ -188,7 +188,7 @@ export function HomePage() {
         <Reveal>
           <SectionTitle kicker="The society">{SOCIETY.blurb}</SectionTitle>
           <p className="mt-3 max-w-2xl text-muted">
-            We're the University of Sheffield's poker society — beginners welcome, sharks
+            We're the University of Sheffield's poker society. Beginners welcome, sharks
             tolerated. {SOCIETY.sessionTimes} at {SOCIETY.venueName}.
           </p>
         </Reveal>
@@ -218,7 +218,7 @@ export function HomePage() {
               <h3 className="mt-2 font-display text-xl font-semibold">The Cash Game</h3>
               <p className="mt-2 text-sm text-muted">
                 Sit when you like, leave when you like, rebuy when it hurts. Your net result
-                each night feeds the season's cash board. Play-money chips — pride is the
+                each night feeds the season's cash board. Play-money chips: pride is the
                 only currency.
               </p>
               <Link to="/sessions" className="mt-4 inline-block text-sm text-ember underline">
@@ -264,7 +264,7 @@ export function HomePage() {
                       ))}
                       {rows.length === 0 && (
                         <li className="text-sm text-muted">
-                          No results yet — the season's wide open.
+                          No results yet. The season's wide open.
                         </li>
                       )}
                     </ol>

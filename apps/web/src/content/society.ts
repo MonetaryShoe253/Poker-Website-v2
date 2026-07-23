@@ -4,13 +4,13 @@
  */
 
 export const SOCIETY = {
-  blurb: "Join us for thrilling poker nights, epic hands, and a great community!",
+  blurb: "Poker nights and a community worth sticking around for.",
   venueName: "The Diamond",
   venueAddress: "32 Leavygreave Rd, Broomhall, Sheffield S3 7RD",
   sessionTimes: "Tuesdays (tournament) & Thursdays (cash), 17:00–20:00",
   membershipUrl: "https://su.sheffield.ac.uk/activities/view/poker",
   instagramUrl: "https://www.instagram.com/pokersoc_sheffield/",
-  contactEmail: null as string | null, // TBA
+  contactEmail: "poksoc@sheffield.ac.uk",
   committee: [
     { name: "Kiran", role: "President" },
     { name: "Milan", role: "Vice-President" },

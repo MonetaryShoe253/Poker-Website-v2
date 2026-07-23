@@ -19,7 +19,7 @@ async function sendWelcomeOnce(user: { id: string; email: string; name?: string 
   await prisma.user.update({ where: { id: user.id }, data: { welcomedAt: new Date() } });
   await sendEmail({
     to: user.email,
-    subject: "You're in — welcome to UOS Poker",
+    subject: "You're in: welcome to UOS Poker",
     react: WelcomeEmail({
       name: user.name ?? "",
       siteUrl: env.SITE_URL,
@@ -64,7 +64,7 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       await sendEmail({
         to: user.email,
-        subject: "Your seat is reserved — confirm your email",
+        subject: "Your seat is reserved: confirm your email",
         react: VerificationEmail({ name: user.name ?? "", url }),
       });
     },

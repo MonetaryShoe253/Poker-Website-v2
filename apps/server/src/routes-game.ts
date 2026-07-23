@@ -92,13 +92,13 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(403).send({ error: "Pick your nickname before submitting results." });
     }
     if (profile.suspendedAt !== null) {
-      return reply.code(403).send({ error: "Your account is suspended — speak to the committee." });
+      return reply.code(403).send({ error: "Your account is suspended. Speak to the committee." });
     }
 
     const parsed = (kind === "TOURNAMENT" ? TournamentSubmission : CashSubmission).safeParse(
       req.body,
     );
-    if (!parsed.success) return reply.code(400).send({ error: "Check the form — something's off." });
+    if (!parsed.success) return reply.code(400).send({ error: "Check the form. Something's off." });
     const body = parsed.data;
 
     const session = await prisma.session.findUnique({
@@ -159,7 +159,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       if ((err as { code?: string }).code === "P2002") {
         return reply
           .code(409)
-          .send({ error: "You've already submitted for this session — one each, dealer's rules." });
+          .send({ error: "You've already submitted for this session. One each, dealer's rules." });
       }
       throw err;
     }

@@ -57,7 +57,7 @@ export function SubmitResultPage() {
         if (
           Math.abs(net) > CASH_NET_SOFT_LIMIT &&
           !window.confirm(
-            `That's a net of ${net >= 0 ? "+" : ""}${net.toLocaleString()} — looks big. Sure?`,
+            `That's a net of ${net >= 0 ? "+" : ""}${net.toLocaleString()}. Looks big. Sure?`,
           )
         ) {
           return;
@@ -77,13 +77,13 @@ export function SubmitResultPage() {
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(data.error ?? "That didn't go through — try again.");
+        setError(data.error ?? "That didn't go through. Try again.");
         return;
       }
       setSuccess(
         session.type === "TOURNAMENT"
-          ? "On the board. Points are live — go look."
-          : "On the board. Net's been counted — go look.",
+          ? "On the board. Points are live. Go look."
+          : "On the board. Net's been counted. Go look.",
       );
     } finally {
       setBusy(false);
@@ -148,7 +148,7 @@ export function SubmitResultPage() {
             >
               {sessions.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.type === "TOURNAMENT" ? "Tournament" : "Cash game"} —{" "}
+                  {s.type === "TOURNAMENT" ? "Tournament" : "Cash game"} ·{" "}
                   {new Date(s.date).toLocaleDateString("en-GB")}
                 </option>
               ))}

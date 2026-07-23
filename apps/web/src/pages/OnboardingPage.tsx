@@ -37,7 +37,7 @@ export function OnboardingPage() {
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        setError(data.error ?? "That didn't work — try another nickname.");
+        setError(data.error ?? "That didn't work. Try another nickname.");
         return;
       }
       invalidateMe();
@@ -55,7 +55,7 @@ export function OnboardingPage() {
         PICK YOUR NAME
       </h1>
       <p className="mt-3 text-center text-sm text-muted">
-        This is how you'll appear at tables and on every leaderboard. Choose well — 3–16
+        This is how you'll appear at tables and on every leaderboard. Choose well: 3–16
         characters, letters, numbers, _ or -.
       </p>
       <div className="panel-steel mt-6 rounded-lg p-6">
