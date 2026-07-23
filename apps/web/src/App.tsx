@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Component, lazy, Suspense, type ReactNode } from "react";
 import { Route, Routes } from "react-router";
 import { Layout } from "./components/Layout";
 import { HomePage } from "./pages/HomePage";
@@ -41,35 +41,51 @@ function RouteFallback() {
   );
 }
 
+class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  override state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  override render() {
+    if (this.state.error) {
+      return (
+        <div className="flex min-h-[40vh] items-center justify-center px-4 text-center text-sm text-muted">
+          <p>That page hit an error. Try refreshing or going back home.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function withSuspense(element: ReactNode) {
+  return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
+}
+
 export function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<HomePage />} />
-        <Route
-          path="*"
-          element={
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                <Route path="society" element={<SocietyPage />} />
-                <Route path="sessions" element={<SessionsPage />} />
-                <Route path="learn" element={<LearnPage />} />
-                <Route path="leaderboards" element={<LeaderboardsPage />} />
-                <Route path="play" element={<PlayPage />} />
-                <Route path="table" element={<TablePage />} />
-                <Route path="submit" element={<SubmitResultPage />} />
-                <Route path="profile" element={<ProfilePage />} />
-                <Route path="admin" element={<AdminPage />} />
-                <Route path="auth" element={<AuthPage />} />
-                <Route path="check-inbox" element={<CheckInboxPage />} />
-                <Route path="onboarding" element={<OnboardingPage />} />
-                <Route path="reset-password" element={<ResetPasswordPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
-          }
-        />
-      </Route>
-    </Routes>
+    <RouteErrorBoundary>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<HomePage />} />
+          <Route path="society" element={withSuspense(<SocietyPage />)} />
+          <Route path="sessions" element={withSuspense(<SessionsPage />)} />
+          <Route path="learn" element={withSuspense(<LearnPage />)} />
+          <Route path="leaderboards" element={withSuspense(<LeaderboardsPage />)} />
+          <Route path="play" element={withSuspense(<PlayPage />)} />
+          <Route path="table" element={withSuspense(<TablePage />)} />
+          <Route path="submit" element={withSuspense(<SubmitResultPage />)} />
+          <Route path="profile" element={withSuspense(<ProfilePage />)} />
+          <Route path="admin" element={withSuspense(<AdminPage />)} />
+          <Route path="auth" element={withSuspense(<AuthPage />)} />
+          <Route path="check-inbox" element={withSuspense(<CheckInboxPage />)} />
+          <Route path="onboarding" element={withSuspense(<OnboardingPage />)} />
+          <Route path="reset-password" element={withSuspense(<ResetPasswordPage />)} />
+          <Route path="*" element={withSuspense(<NotFoundPage />)} />
+        </Route>
+      </Routes>
+    </RouteErrorBoundary>
   );
 }

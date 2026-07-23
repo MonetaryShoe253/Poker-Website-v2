@@ -1,4 +1,4 @@
-import type { Season } from "@prisma/client";
+import type { Series } from "@prisma/client";
 import {
   DEFAULT_POINTS_SCHEME,
   SESSION_CODE_ALPHABET,
@@ -37,23 +37,24 @@ export function generateSessionCode(): string {
 }
 
 /** The active season; auto-creates the academic year if none exists. */
-export async function ensureActiveSeason(): Promise<Season> {
-  const existing = await prisma.season.findFirst({ where: { isActive: true } });
+export async function ensureActiveSeason(): Promise<Series> {
+  const existing = await prisma.series.findFirst({ where: { isActive: true } });
   if (existing) return existing;
   const now = londonParts(new Date());
   const startYear = now.month >= 9 ? now.year : now.year - 1;
-  const season = await prisma.season.create({
+  const series = await prisma.series.create({
     data: {
       name: `Season ${startYear}/${String((startYear + 1) % 100).padStart(2, "0")}`,
       startsAt: londonToUtc(startYear, 9, 1),
       endsAt: londonToUtc(startYear + 1, 9, 1),
       isActive: true,
+      status: "ACTIVE",
     },
   });
   await prisma.pointsScheme.create({
-    data: { seasonId: season.id, scheme: DEFAULT_POINTS_SCHEME },
+    data: { seriesId: series.id, scheme: DEFAULT_POINTS_SCHEME },
   });
-  return season;
+  return series;
 }
 
 export async function getRecurrence(): Promise<RecurrenceRule[]> {
@@ -78,12 +79,13 @@ export async function ensureUpcomingSessions(horizonDays = 14): Promise<void> {
       if (parts.weekday !== rule.weekday) continue;
       await prisma.session.upsert({
         where: {
-          seasonId_date_type: { seasonId: season.id, date: day, type: rule.type },
+          seriesId_date_type: { seriesId: season.id, date: day, type: rule.type },
         },
         create: {
-          seasonId: season.id,
+          seriesId: season.id,
           date: day,
           type: rule.type,
+          status: "SCHEDULED",
           code: generateSessionCode(),
           submissionsOpenAt: londonToUtc(
             parts.year,

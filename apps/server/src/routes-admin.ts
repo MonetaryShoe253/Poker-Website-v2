@@ -12,6 +12,11 @@ import {
   getRecurrence,
   pointsForPosition,
 } from "./services/seasons";
+import {
+  calculateTournamentPoints,
+  ensureFormulaConfigSeed,
+  getTournamentFormula,
+} from "./services/tournament";
 import { londonToUtc } from "./time";
 
 /**
@@ -42,19 +47,19 @@ async function audit(actorId: string, action: string, detail?: unknown): Promise
 type Scheme = { positions: Record<string, number>; participation: number };
 
 /** Recompute every tournament submission's points for a season. */
-async function recomputeSeasonPoints(seasonId: string): Promise<number> {
-  const schemeRow = await prisma.pointsScheme.findUnique({ where: { seasonId } });
+async function recomputeSeasonPoints(seriesId: string): Promise<number> {
+  const schemeRow = await prisma.pointsScheme.findUnique({ where: { seriesId } });
   const scheme = (schemeRow?.scheme as Scheme | undefined) ?? {
     positions: { "1": 10, "2": 7, "3": 5, "4": 3, "5": 2 },
     participation: 1,
   };
-  const submissions = await prisma.submission.findMany({
-    where: { session: { seasonId, type: "TOURNAMENT" }, finishingPosition: { not: null } },
+  const submissions = await prisma.sessionEntry.findMany({
+    where: { session: { seriesId, type: "TOURNAMENT" }, finishingPosition: { not: null } },
   });
   for (const sub of submissions) {
     const points = pointsForPosition(scheme, sub.finishingPosition!);
     if (points !== sub.points) {
-      await prisma.submission.update({ where: { id: sub.id }, data: { points } });
+      await prisma.sessionEntry.update({ where: { id: sub.id }, data: { points } });
     }
   }
   return submissions.length;
@@ -72,7 +77,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         prisma.user.count(),
         prisma.user.count({ where: { emailVerified: true } }),
         prisma.user.count({ where: { createdAt: { gte: weekAgo } } }),
-        prisma.submission.count({ where: { createdAt: { gte: weekAgo }, voidedAt: null } }),
+        prisma.sessionEntry.count({ where: { createdAt: { gte: weekAgo }, voidedAt: null } }),
         prisma.authSession.count({ where: { updatedAt: { gte: dayAgo } } }),
         prisma.auditLog.findMany({
           orderBy: { createdAt: "desc" },
@@ -103,7 +108,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const sessions = await prisma.session.findMany({
       where: { date: { gte: new Date(Date.now() - 14 * 86_400_000) } },
       orderBy: { date: "asc" },
-      include: { _count: { select: { submissions: true } } },
+      include: { _count: { select: { entries: true } } },
     });
     return sessions.map((s) => ({
       id: s.id,
@@ -111,7 +116,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       date: s.date,
       code: s.code,
       status: s.status,
-      submissions: s._count.submissions,
+      submissions: s._count.entries,
     }));
   });
 
@@ -125,12 +130,64 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, code };
   });
 
-  app.post("/api/admin/sessions/:id/cancel", async (req, reply) => {
+  app.post("/api/admin/sessions/:id/open", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    await prisma.session.update({ where: { id }, data: { status: "CANCELLED" } });
-    await audit(admin.userId, "session.cancel", { sessionId: id });
+    await prisma.session.update({ where: { id }, data: { status: "OPEN" } });
+    await audit(admin.userId, "session.open", { sessionId: id });
+    return { ok: true };
+  });
+
+  app.post("/api/admin/sessions/:id/late-reg-close", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    await prisma.session.update({ where: { id }, data: { status: "LATE_REG_CLOSED" } });
+    await audit(admin.userId, "session.lateRegClose", { sessionId: id });
+    return { ok: true };
+  });
+
+  app.post("/api/admin/sessions/:id/close", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    await prisma.session.update({ where: { id }, data: { status: "CLOSED" } });
+    await prisma.sessionEntry.updateMany({
+      where: { sessionId: id, voidedAt: null, finishingPosition: null, signOutTime: null },
+      data: { finishingPosition: 999_999, points: 0 },
+    });
+    const formula = await getTournamentFormula();
+    const entries = await prisma.sessionEntry.findMany({ where: { sessionId: id, voidedAt: null } });
+    for (const entry of entries) {
+      if (entry.finishingPosition && entry.finishingPosition !== 999_999) {
+        const points = calculateTournamentPoints(entry.finishingPosition, entry.entrantCount ?? 1, formula);
+        await prisma.sessionEntry.update({ where: { id: entry.id }, data: { points } });
+      }
+    }
+    await audit(admin.userId, "session.close", { sessionId: id });
+    return { ok: true };
+  });
+
+  app.put("/api/admin/sessions/:id/active-player-count", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ activePlayerCount: z.number().int().min(0) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad active player count." });
+    await prisma.session.update({ where: { id }, data: { activePlayerCount: parsed.data.activePlayerCount } });
+    await audit(admin.userId, "session.activePlayerCount", { sessionId: id, activePlayerCount: parsed.data.activePlayerCount });
+    return { ok: true };
+  });
+
+  app.post("/api/admin/sessions/:id/archive", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    await prisma.session.update({ where: { id }, data: { status: "ARCHIVED" } });
+    await audit(admin.userId, "session.archive", { sessionId: id });
     return { ok: true };
   });
 
@@ -144,17 +201,17 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const parsed = OneOffBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad date or type." });
     const [y, m, d] = parsed.data.date.split("-").map(Number) as [number, number, number];
-    const season = await ensureActiveSeason();
+    const series = await ensureActiveSeason();
     const session = await prisma.session.upsert({
       where: {
-        seasonId_date_type: {
-          seasonId: season.id,
+        seriesId_date_type: {
+          seriesId: series.id,
           date: londonToUtc(y, m, d),
           type: parsed.data.type,
         },
       },
       create: {
-        seasonId: season.id,
+        seriesId: series.id,
         date: londonToUtc(y, m, d),
         type: parsed.data.type,
         code: generateSessionCode(),
@@ -165,6 +222,36 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     });
     await audit(admin.userId, "session.create", { sessionId: session.id, date: parsed.data.date });
     return { ok: true, id: session.id, code: session.code };
+  });
+
+  app.get("/api/admin/formula", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    await ensureFormulaConfigSeed();
+    return getTournamentFormula();
+  });
+
+  app.put("/api/admin/formula", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const parsed = z.object({
+      A: z.number(),
+      B: z.number(),
+      ITM_PERCENT: z.number(),
+      ITM_FLOOR: z.number(),
+      SIGNOUT_FLOOR: z.number(),
+      STREAK_BASE: z.number(),
+    }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad formula." });
+    for (const [key, value] of Object.entries(parsed.data)) {
+      await prisma.formulaConfig.upsert({
+        where: { key },
+        update: { value: String(value) },
+        create: { key, value: String(value) },
+      });
+    }
+    await audit(admin.userId, "formula.update", parsed.data);
+    return { ok: true };
   });
 
   const RecurrenceBody = z.array(
@@ -195,7 +282,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { sessionId, q } = req.query as { sessionId?: string; q?: string };
-    const submissions = await prisma.submission.findMany({
+    const submissions = await prisma.sessionEntry.findMany({
       where: {
         ...(sessionId ? { sessionId } : {}),
         ...(q
@@ -226,7 +313,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    await prisma.submission.update({
+    await prisma.sessionEntry.update({
       where: { id },
       data: { voidedAt: new Date(), voidedBy: admin.userId },
     });
@@ -238,7 +325,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    await prisma.submission.update({
+    await prisma.sessionEntry.update({
       where: { id },
       data: { voidedAt: null, voidedBy: null },
     });
@@ -258,15 +345,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const parsed = EditSubmissionBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad edit." });
-    const existing = await prisma.submission.findUnique({
+    const existing = await prisma.sessionEntry.findUnique({
       where: { id },
-      include: { session: { include: { season: { include: { pointsScheme: true } } } } },
+      include: { session: { include: { series: { include: { pointsScheme: true } } } } },
     });
     if (!existing) return reply.code(404).send({ error: "No such submission." });
 
     const data: Record<string, unknown> = { ...parsed.data };
     if (existing.session.type === "TOURNAMENT" && parsed.data.finishingPosition) {
-      const scheme = existing.session.season.pointsScheme?.scheme as Scheme | undefined;
+      const scheme = existing.session.series.pointsScheme?.scheme as Scheme | undefined;
       data.points = pointsForPosition(
         scheme ?? { positions: { "1": 10, "2": 7, "3": 5, "4": 3, "5": 2 }, participation: 1 },
         parsed.data.finishingPosition,
@@ -277,7 +364,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       const cashOut = parsed.data.cashOutChips ?? existing.cashOutChips ?? 0;
       data.netChips = cashOut - buyIn;
     }
-    await prisma.submission.update({ where: { id }, data });
+    await prisma.sessionEntry.update({ where: { id }, data });
     await audit(admin.userId, "submission.edit", { submissionId: id, ...parsed.data });
     return { ok: true };
   });
@@ -287,7 +374,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { seasonId } = req.params as { seasonId: string };
-    const row = await prisma.pointsScheme.findUnique({ where: { seasonId } });
+    const row = await prisma.pointsScheme.findUnique({ where: { seriesId: seasonId } });
     return { scheme: (row?.scheme as Scheme | undefined) ?? null };
   });
 
@@ -302,8 +389,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const parsed = SchemeBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad scheme." });
     await prisma.pointsScheme.upsert({
-      where: { seasonId },
-      create: { seasonId, scheme: parsed.data },
+      where: { seriesId: seasonId },
+      create: { seriesId: seasonId, scheme: parsed.data },
       update: { scheme: parsed.data },
     });
     const recomputed = await recomputeSeasonPoints(seasonId);
@@ -322,18 +409,19 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!admin) return;
     const parsed = SeasonBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad season." });
-    await prisma.season.updateMany({ data: { isActive: false }, where: { isActive: true } });
-    const season = await prisma.season.create({
+    await prisma.series.updateMany({ data: { isActive: false }, where: { isActive: true } });
+    const season = await prisma.series.create({
       data: {
         name: parsed.data.name,
         startsAt: new Date(parsed.data.startsAt),
         endsAt: new Date(parsed.data.endsAt),
         isActive: true,
+        status: "ACTIVE",
       },
     });
     await prisma.pointsScheme.create({
       data: {
-        seasonId: season.id,
+        seriesId: season.id,
         scheme: { positions: { "1": 10, "2": 7, "3": 5, "4": 3, "5": 2 }, participation: 1 },
       },
     });
@@ -348,8 +436,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!admin) return;
     const { id } = req.params as { id: string };
 
-    const submissions = await prisma.submission.findMany({
-      where: { session: { seasonId: id }, voidedAt: null },
+    const submissions = await prisma.sessionEntry.findMany({
+      where: { session: { seriesId: id }, voidedAt: null },
       include: { user: { include: { profile: true } }, session: true },
     });
     const points = new Map<string, { nickname: string; value: number }>();
@@ -373,15 +461,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const tournamentChampion = champion(points);
     const cashChampion = champion(net);
     await prisma.$transaction(async (tx) => {
-      await tx.season.update({ where: { id }, data: { isActive: false, endsAt: new Date() } });
+      await tx.series.update({ where: { id }, data: { isActive: false, endsAt: new Date() } });
       for (const [board, entry] of [
         ["TOURNAMENT", tournamentChampion],
         ["CASH", cashChampion],
       ] as const) {
         if (entry) {
           await tx.hallOfFameEntry.upsert({
-            where: { seasonId_board: { seasonId: id, board } },
-            create: { seasonId: id, board, nickname: entry.nickname, value: entry.value },
+            where: { seriesId_board: { seriesId: id, board } },
+            create: { seriesId: id, board, nickname: entry.nickname, value: entry.value },
             update: { nickname: entry.nickname, value: entry.value },
           });
         }
@@ -468,11 +556,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
   // --- Announcement banner --------------------------------------------------------
   app.get("/api/announcement", async () => {
-    const announcement = await prisma.announcement.findFirst({
-      where: { active: true },
-      orderBy: { createdAt: "desc" },
-    });
-    return { message: announcement?.message ?? null };
+    try {
+      const announcement = await prisma.announcement.findFirst({
+        where: { active: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return { message: announcement?.message ?? null };
+    } catch {
+      return { message: null };
+    }
   });
 
   const BannerBody = z.object({ message: z.string().min(1).max(300) });

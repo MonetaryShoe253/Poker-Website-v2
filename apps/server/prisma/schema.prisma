@@ -20,9 +20,17 @@ enum SessionType {
 }
 
 enum SessionStatus {
+  CREATED
   SCHEDULED
-  CANCELLED
-  COMPLETED
+  OPEN
+  LATE_REG_CLOSED
+  CLOSED
+  ARCHIVED
+}
+
+enum SeriesStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 // ---------------------------------------------------------------------------
@@ -36,19 +44,32 @@ model User {
   image         String?
   role          Role     @default(USER)
   emailVerified Boolean  @default(false)
-  /// Set when the welcome email goes out (idempotency guard).
   welcomedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  profile     Profile?
-  submissions Submission[]
-  eloHistory  EloHistory[]
-  auditLogs   AuditLog[]   @relation("AuditActor")
-  sessions    AuthSession[]
-  accounts    Account[]
+  profile        Profile?
+  player         Player?
+  sessionEntries SessionEntry[]
+  eloHistory     EloHistory[]
+  auditLogs      AuditLog[]     @relation("AuditActor")
+  sessions       AuthSession[]
+  accounts       Account[]
 
   @@map("user")
+}
+
+model Player {
+  id             String         @id @default(cuid())
+  userId         String?        @unique
+  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  displayName    String
+  email          String         @unique @db.Citext
+  createdAt      DateTime       @default(now())
+  sessionEntries SessionEntry[]
+  streaks        Streak[]
+
+  @@map("player")
 }
 
 // --- Better Auth tables ------------------------------------------------------
@@ -65,7 +86,7 @@ model AuthSession {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@map("session")
+  @@map("auth_session")
 }
 
 model Account {
@@ -104,13 +125,11 @@ model Profile {
   id               String    @id @default(cuid())
   userId           String    @unique
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Null until onboarding completes (Google users pick on first login).
   nickname         String?   @unique @db.Citext
   avatarId         String    @default("spade-ember")
   bankroll         Int       @default(25000)
   elo              Float     @default(1000)
   ratedHands       Int       @default(0)
-  /// { sounds: boolean, fourColourDeck: boolean, autoMuck: boolean }
   settings         Json      @default("{\"sounds\":true,\"fourColourDeck\":false,\"autoMuck\":true}")
   lastDailyBonusAt DateTime?
   chatBannedAt     DateTime?
@@ -120,86 +139,118 @@ model Profile {
 }
 
 // ---------------------------------------------------------------------------
-// Seasons, sessions, submissions (in-person)
+// Series, sessions, session entries, and streaks
 // ---------------------------------------------------------------------------
 
-model Season {
-  id        String   @id @default(cuid())
-  name      String
-  startsAt  DateTime
-  endsAt    DateTime
-  isActive  Boolean  @default(false)
-  createdAt DateTime @default(now())
+model Series {
+  id               String       @id @default(cuid())
+  name             String
+  status           SeriesStatus @default(ACTIVE)
+  createdAt        DateTime     @default(now())
+  closeRequestedAt DateTime?
+  closeRequestedBy String?
+  startsAt         DateTime
+  endsAt           DateTime
+  isActive         Boolean      @default(false)
 
   sessions     Session[]
+  streaks      Streak[]
   pointsScheme PointsScheme?
   hallOfFame   HallOfFameEntry[]
+
+  @@map("series")
 }
 
 model Session {
-  id                 String        @id @default(cuid())
-  type               SessionType
-  /// The session's calendar date, midnight Europe/London stored as UTC instant.
-  date               DateTime
+  id                String        @id @default(cuid())
+  seriesId          String
+  series            Series        @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  type              SessionType
+  date              DateTime
+  scheduledStartTime DateTime?
+  actualStartTime   DateTime?
+  estimatedDuration Float?
+  status            SessionStatus @default(CREATED)
+  activePlayerCount Int?
+  blindSchedule     Json?
+  currentBlindLevel Int           @default(0)
+  timerStartedAt    DateTime?
+  timerPausedAt     DateTime?
+  isPaused          Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
   code               String
   submissionsOpenAt  DateTime
   submissionsCloseAt DateTime
-  status             SessionStatus @default(SCHEDULED)
-  seasonId           String
-  season             Season        @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  createdAt          DateTime      @default(now())
+  entries            SessionEntry[]
 
-  submissions Submission[]
-
-  @@unique([seasonId, date, type])
-  @@index([seasonId, date])
+  @@unique([seriesId, date, type])
+  @@index([seriesId, date])
+  @@map("session")
 }
 
-model Submission {
-  id        String   @id @default(cuid())
-  sessionId String
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model SessionEntry {
+  id                  String    @id @default(cuid())
+  sessionId           String
+  session             Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  playerId            String?
+  player              Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signInTime          DateTime  @default(now())
+  signOutTime         DateTime?
+  position            Int?
+  basePoints          Float?
+  floorPoints         Float?
+  isDNF               Boolean   @default(false)
 
-  // Tournament payload
-  finishingPosition Int?
-  entrantCount      Int?
-  /// Derived from the season's points scheme; recomputed on scheme edits.
-  points            Int?
-
-  // Cash payload (chips)
-  buyInChips   Int?
-  cashOutChips Int?
-  /// cashOutChips - buyInChips, denormalised for board queries.
-  netChips     Int?
-
-  voidedAt DateTime?
-  voidedBy String?
+  finishingPosition   Int?
+  entrantCount        Int?
+  points              Int?
+  buyInChips          Int?
+  cashOutChips        Int?
+  netChips            Int?
+  voidedAt            DateTime?
+  voidedBy            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@unique([sessionId, userId])
+  @@index([sessionId])
   @@index([userId])
+  @@map("session_entry")
+}
+
+model Streak {
+  id            String  @id @default(cuid())
+  playerId      String
+  player        Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  seriesId      String
+  series        Series  @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  currentStreak Int     @default(0)
+  longestStreak Int     @default(0)
+  streakBonus   Float   @default(0)
+
+  @@unique([playerId, seriesId])
 }
 
 model PointsScheme {
   id       String @id @default(cuid())
-  seasonId String @unique
-  season   Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  /// { positions: { "1": 10, "2": 7, ... }, participation: 1 }
+  seriesId String @unique
+  series   Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   scheme   Json
 }
 
 model HallOfFameEntry {
   id       String      @id @default(cuid())
-  seasonId String
-  season   Season      @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  seriesId String
+  series   Series      @relation(fields: [seriesId], references: [id], onDelete: Cascade)
   board    SessionType
   nickname String
   value    Int
 
-  @@unique([seasonId, board])
+  @@unique([seriesId, board])
 }
 
 // ---------------------------------------------------------------------------
@@ -211,17 +262,13 @@ model HandRecord {
   tableId   String
   tableName String
   handNo    Int
-  /// [{ seat, userId?, botId?, nickname, startingStack, net }]
   players   Json
-  /// [{ nickname, amount, handName? }]
   winners   Json
   potSize   Int
   board     String
   summary   String
   rated     Boolean
-  /// { userId: delta } for rated hands
   eloDeltas Json?
-  /// Full action log; pruned after 7 days.
   actionLog Json?
   createdAt DateTime @default(now())
 
@@ -253,20 +300,38 @@ model Announcement {
   createdAt DateTime @default(now())
 }
 
-/// Free-form operational settings (e.g. "sessionRecurrence").
 model Setting {
   key   String @id
   value Json
 }
 
-model AuditLog {
+model FormulaConfig {
   id        String   @id @default(cuid())
-  actorId   String
-  actor     User     @relation("AuditActor", fields: [actorId], references: [id])
-  action    String
-  /// Arbitrary structured context for the mutation.
-  detail    Json?
-  createdAt DateTime @default(now())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id])
+  action     String
+  detail     Json?
+  createdAt  DateTime @default(now())
+  tdId       String?
+  targetType String?
+  targetId   String?
+  oldValue   String?
+  newValue   String?
+  timestamp  DateTime @default(now())
 
   @@index([createdAt])
+}
+
+model TdAccount {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
 }

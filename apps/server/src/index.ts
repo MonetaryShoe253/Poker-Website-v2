@@ -14,6 +14,7 @@ import { startSessionScheduler, stopSessionScheduler } from "./services/seasons"
 import { persistSettlement, pruneOldHandRecords } from "./services/settlement";
 import { setLiveStatsProvider } from "./realtime/stats";
 import { printResendDnsRecords } from "./email/dns";
+import { ensureTournamentBootstrap } from "./services/bootstrap";
 
 const app = await buildServer();
 
@@ -81,6 +82,7 @@ setLiveStatsProvider(() => ({
   clients: realtime.io.engine.clientsCount,
 }));
 
+void ensureTournamentBootstrap().catch((err) => app.log.error({ err }, "bootstrap failed"));
 startSessionScheduler();
 const pruneTimer = setInterval(
   () => void pruneOldHandRecords().catch((err) => app.log.error({ err }, "prune failed")),

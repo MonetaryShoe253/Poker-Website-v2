@@ -8,7 +8,10 @@ CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN');
 CREATE TYPE "SessionType" AS ENUM ('TOURNAMENT', 'CASH');
 
 -- CreateEnum
-CREATE TYPE "SessionStatus" AS ENUM ('SCHEDULED', 'CANCELLED', 'COMPLETED');
+CREATE TYPE "SessionStatus" AS ENUM ('CREATED', 'SCHEDULED', 'OPEN', 'LATE_REG_CLOSED', 'CLOSED', 'ARCHIVED');
+
+-- CreateEnum
+CREATE TYPE "SeriesStatus" AS ENUM ('ACTIVE', 'ARCHIVED');
 
 -- CreateTable
 CREATE TABLE "user" (
@@ -18,6 +21,7 @@ CREATE TABLE "user" (
     "image" TEXT,
     "role" "Role" NOT NULL DEFAULT 'USER',
     "emailVerified" BOOLEAN NOT NULL DEFAULT false,
+    "welcomedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -25,7 +29,18 @@ CREATE TABLE "user" (
 );
 
 -- CreateTable
-CREATE TABLE "session" (
+CREATE TABLE "player" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT,
+    "displayName" TEXT NOT NULL,
+    "email" CITEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "player_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "auth_session" (
     "id" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
     "token" TEXT NOT NULL,
@@ -35,7 +50,7 @@ CREATE TABLE "session" (
     "userAgent" TEXT,
     "userId" TEXT NOT NULL,
 
-    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "auth_session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -89,39 +104,57 @@ CREATE TABLE "Profile" (
 );
 
 -- CreateTable
-CREATE TABLE "Season" (
+CREATE TABLE "series" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "status" "SeriesStatus" NOT NULL DEFAULT 'ACTIVE',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "closeRequestedAt" TIMESTAMP(3),
+    "closeRequestedBy" TEXT,
     "startsAt" TIMESTAMP(3) NOT NULL,
     "endsAt" TIMESTAMP(3) NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Season_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "series_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Session" (
+CREATE TABLE "session" (
     "id" TEXT NOT NULL,
+    "seriesId" TEXT NOT NULL,
     "type" "SessionType" NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
+    "scheduledStartTime" TIMESTAMP(3),
+    "actualStartTime" TIMESTAMP(3),
+    "estimatedDuration" DOUBLE PRECISION,
+    "status" "SessionStatus" NOT NULL DEFAULT 'CREATED',
+    "activePlayerCount" INTEGER,
+    "blindSchedule" JSONB,
+    "currentBlindLevel" INTEGER NOT NULL DEFAULT 0,
+    "timerStartedAt" TIMESTAMP(3),
+    "timerPausedAt" TIMESTAMP(3),
+    "isPaused" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     "code" TEXT NOT NULL,
     "submissionsOpenAt" TIMESTAMP(3) NOT NULL,
     "submissionsCloseAt" TIMESTAMP(3) NOT NULL,
-    "status" "SessionStatus" NOT NULL DEFAULT 'SCHEDULED',
-    "seasonId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "Submission" (
+CREATE TABLE "session_entry" (
     "id" TEXT NOT NULL,
     "sessionId" TEXT NOT NULL,
+    "playerId" TEXT,
     "userId" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "signInTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "signOutTime" TIMESTAMP(3),
+    "position" INTEGER,
+    "basePoints" DOUBLE PRECISION,
+    "floorPoints" DOUBLE PRECISION,
+    "isDNF" BOOLEAN NOT NULL DEFAULT false,
     "finishingPosition" INTEGER,
     "entrantCount" INTEGER,
     "points" INTEGER,
@@ -130,14 +163,28 @@ CREATE TABLE "Submission" (
     "netChips" INTEGER,
     "voidedAt" TIMESTAMP(3),
     "voidedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Submission_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "session_entry_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Streak" (
+    "id" TEXT NOT NULL,
+    "playerId" TEXT NOT NULL,
+    "seriesId" TEXT NOT NULL,
+    "currentStreak" INTEGER NOT NULL DEFAULT 0,
+    "longestStreak" INTEGER NOT NULL DEFAULT 0,
+    "streakBonus" DOUBLE PRECISION NOT NULL DEFAULT 0,
+
+    CONSTRAINT "Streak_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "PointsScheme" (
     "id" TEXT NOT NULL,
-    "seasonId" TEXT NOT NULL,
+    "seriesId" TEXT NOT NULL,
     "scheme" JSONB NOT NULL,
 
     CONSTRAINT "PointsScheme_pkey" PRIMARY KEY ("id")
@@ -146,7 +193,7 @@ CREATE TABLE "PointsScheme" (
 -- CreateTable
 CREATE TABLE "HallOfFameEntry" (
     "id" TEXT NOT NULL,
-    "seasonId" TEXT NOT NULL,
+    "seriesId" TEXT NOT NULL,
     "board" "SessionType" NOT NULL,
     "nickname" TEXT NOT NULL,
     "value" INTEGER NOT NULL,
@@ -197,24 +244,64 @@ CREATE TABLE "Announcement" (
 );
 
 -- CreateTable
+CREATE TABLE "Setting" (
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+
+    CONSTRAINT "Setting_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "FormulaConfig" (
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FormulaConfig_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AuditLog" (
     "id" TEXT NOT NULL,
     "actorId" TEXT NOT NULL,
     "action" TEXT NOT NULL,
     "detail" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tdId" TEXT,
+    "targetType" TEXT,
+    "targetId" TEXT,
+    "oldValue" TEXT,
+    "newValue" TEXT,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TdAccount" (
+    "id" TEXT NOT NULL,
+    "username" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TdAccount_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
 CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
+CREATE UNIQUE INDEX "player_userId_key" ON "player"("userId");
 
 -- CreateIndex
-CREATE INDEX "session_userId_idx" ON "session"("userId");
+CREATE UNIQUE INDEX "player_email_key" ON "player"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "auth_session_token_key" ON "auth_session"("token");
+
+-- CreateIndex
+CREATE INDEX "auth_session_userId_idx" ON "auth_session"("userId");
 
 -- CreateIndex
 CREATE INDEX "account_userId_idx" ON "account"("userId");
@@ -229,19 +316,28 @@ CREATE UNIQUE INDEX "Profile_userId_key" ON "Profile"("userId");
 CREATE UNIQUE INDEX "Profile_nickname_key" ON "Profile"("nickname");
 
 -- CreateIndex
-CREATE INDEX "Session_seasonId_date_idx" ON "Session"("seasonId", "date");
+CREATE INDEX "session_seriesId_date_idx" ON "session"("seriesId", "date");
 
 -- CreateIndex
-CREATE INDEX "Submission_userId_idx" ON "Submission"("userId");
+CREATE UNIQUE INDEX "session_seriesId_date_type_key" ON "session"("seriesId", "date", "type");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Submission_sessionId_userId_key" ON "Submission"("sessionId", "userId");
+CREATE INDEX "session_entry_sessionId_idx" ON "session_entry"("sessionId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PointsScheme_seasonId_key" ON "PointsScheme"("seasonId");
+CREATE INDEX "session_entry_userId_idx" ON "session_entry"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "HallOfFameEntry_seasonId_board_key" ON "HallOfFameEntry"("seasonId", "board");
+CREATE UNIQUE INDEX "session_entry_sessionId_userId_key" ON "session_entry"("sessionId", "userId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Streak_playerId_seriesId_key" ON "Streak"("playerId", "seriesId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PointsScheme_seriesId_key" ON "PointsScheme"("seriesId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HallOfFameEntry_seriesId_board_key" ON "HallOfFameEntry"("seriesId", "board");
 
 -- CreateIndex
 CREATE INDEX "HandRecord_tableId_handNo_idx" ON "HandRecord"("tableId", "handNo");
@@ -253,10 +349,19 @@ CREATE INDEX "HandRecord_createdAt_idx" ON "HandRecord"("createdAt");
 CREATE INDEX "EloHistory_userId_createdAt_idx" ON "EloHistory"("userId", "createdAt");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "FormulaConfig_key_key" ON "FormulaConfig"("key");
+
+-- CreateIndex
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "TdAccount_username_key" ON "TdAccount"("username");
+
 -- AddForeignKey
-ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "player" ADD CONSTRAINT "player_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "auth_session" ADD CONSTRAINT "auth_session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -265,19 +370,28 @@ ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId"
 ALTER TABLE "Profile" ADD CONSTRAINT "Profile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Session" ADD CONSTRAINT "Session_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES "Season"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session" ADD CONSTRAINT "session_seriesId_fkey" FOREIGN KEY ("seriesId") REFERENCES "series"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Submission" ADD CONSTRAINT "Submission_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "session"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Submission" ADD CONSTRAINT "Submission_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "player"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PointsScheme" ADD CONSTRAINT "PointsScheme_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES "Season"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "HallOfFameEntry" ADD CONSTRAINT "HallOfFameEntry_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES "Season"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Streak" ADD CONSTRAINT "Streak_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "player"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Streak" ADD CONSTRAINT "Streak_seriesId_fkey" FOREIGN KEY ("seriesId") REFERENCES "series"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PointsScheme" ADD CONSTRAINT "PointsScheme_seriesId_fkey" FOREIGN KEY ("seriesId") REFERENCES "series"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HallOfFameEntry" ADD CONSTRAINT "HallOfFameEntry_seriesId_fkey" FOREIGN KEY ("seriesId") REFERENCES "series"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EloHistory" ADD CONSTRAINT "EloHistory_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;

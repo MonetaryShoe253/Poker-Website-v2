@@ -10,6 +10,7 @@ import {
   generateSessionCode,
   pointsForPosition,
 } from "./services/seasons";
+import { calculateTournamentPoints, getTournamentFormula } from "./services/tournament";
 import { addLondonDays, londonMidnight, londonParts, londonToUtc } from "./time";
 
 /** Resolve the verified user for a request, or null. */
@@ -44,8 +45,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   // --- Seasons & sessions ------------------------------------------------------
 
   app.get("/api/seasons", async () => {
-    const seasons = await prisma.season.findMany({ orderBy: { startsAt: "desc" } });
-    return seasons.map((s) => ({
+    const series = await prisma.series.findMany({ orderBy: { startsAt: "desc" } });
+    return series.map((s) => ({
       id: s.id,
       name: s.name,
       isActive: s.isActive,
@@ -55,13 +56,17 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/sessions/upcoming", async () => {
-    const sessions = await prisma.session.findMany({
-      where: { date: { gte: londonMidnight(new Date()) }, status: "SCHEDULED" },
-      orderBy: { date: "asc" },
-      take: 8,
-    });
-    // No codes here, ever — codes live in the admin panel only.
-    return sessions.map((s) => ({ id: s.id, type: s.type, date: s.date }));
+    try {
+      const sessions = await prisma.session.findMany({
+        where: { date: { gte: londonMidnight(new Date()) }, status: "SCHEDULED" },
+        orderBy: { date: "asc" },
+        take: 8,
+      });
+      // No codes here, ever — codes live in the admin panel only.
+      return sessions.map((s) => ({ id: s.id, type: s.type, date: s.date }));
+    } catch (err) {
+      return [];
+    }
   });
 
   /** Sessions whose submission window is open right now. */
@@ -103,7 +108,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
     const session = await prisma.session.findUnique({
       where: { id: body.sessionId },
-      include: { season: { include: { pointsScheme: true } } },
+      include: { series: { include: { pointsScheme: true } } },
     });
     if (!session || session.status !== "SCHEDULED" || session.type !== kind) {
       return reply.code(404).send({ error: "That session doesn't exist." });
@@ -128,14 +133,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           .code(400)
           .send({ error: "Finishing position can't be higher than the number of entrants." });
       }
-      const scheme =
-        (session.season.pointsScheme?.scheme as {
-          positions: Record<string, number>;
-          participation: number;
-        } | null) ?? null;
-      const points = scheme
-        ? pointsForPosition(scheme, b.finishingPosition)
-        : pointsForPosition({ positions: { "1": 10, "2": 7, "3": 5, "4": 3, "5": 2 }, participation: 1 }, b.finishingPosition);
+      const formula = await getTournamentFormula();
+      const points = calculateTournamentPoints(b.finishingPosition, b.entrantCount, formula);
       data = {
         finishingPosition: b.finishingPosition,
         entrantCount: b.entrantCount,
@@ -151,7 +150,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
-      const submission = await prisma.submission.create({
+      const submission = await prisma.sessionEntry.create({
         data: { sessionId: session.id, userId: user.id, ...data },
       });
       return { ok: true, submission: { id: submission.id, ...data } };
@@ -177,10 +176,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
   const seasonFilter = async (seasonId: string | undefined) => {
     if (seasonId === "all") return {};
-    const season = seasonId
-      ? await prisma.season.findUnique({ where: { id: seasonId } })
+    const series = seasonId
+      ? await prisma.series.findUnique({ where: { id: seasonId } })
       : await ensureActiveSeason();
-    return season ? { session: { seasonId: season.id } } : {};
+    return series ? { session: { seriesId: series.id } } : {};
   };
 
   app.get("/api/leaderboards/tournament", async (req) => {
@@ -191,7 +190,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       session: { type: "TOURNAMENT" as const },
       ...(await seasonFilter(seasonId)),
     };
-    const submissions = await prisma.submission.findMany({
+    const submissions = await prisma.sessionEntry.findMany({
       where,
       include: { user: { include: { profile: true } } },
     });
@@ -254,7 +253,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       session: { type: "CASH" as const },
       ...(await seasonFilter(seasonId)),
     };
-    const submissions = await prisma.submission.findMany({
+    const submissions = await prisma.sessionEntry.findMany({
       where,
       include: { user: { include: { profile: true } } },
     });
@@ -347,13 +346,88 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.post("/api/sessions/:id/signin", async (req, reply) => {
+    const user = await verifiedUser(req);
+    if (!user) return reply.code(401).send({ error: "Sign in first." });
+    const { id } = req.params as { id: string };
+    const body = z.object({ nickname: z.string().min(1).max(32) }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "Bad sign-in request." });
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session || session.status !== "OPEN") return reply.code(404).send({ error: "Session not open." });
+    const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
+    if (!profile?.nickname) return reply.code(403).send({ error: "Pick your nickname first." });
+    await prisma.sessionEntry.upsert({
+      where: { sessionId_userId: { sessionId: id, userId: user.id } },
+      update: { signInTime: new Date(), voidedAt: null },
+      create: { sessionId: id, userId: user.id, signInTime: new Date() },
+    });
+    return { ok: true };
+  });
+
+  app.post("/api/sessions/:id/signout", async (req, reply) => {
+    const user = await verifiedUser(req);
+    if (!user) return reply.code(401).send({ error: "Sign in first." });
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session || session.status === "CREATED" || session.status === "ARCHIVED") return reply.code(404).send({ error: "Session not active." });
+    const submission = await prisma.sessionEntry.findUnique({ where: { sessionId_userId: { sessionId: id, userId: user.id } } });
+    if (!submission) return reply.code(404).send({ error: "You are not signed in." });
+    const formula = await getTournamentFormula();
+    const approxPoints = calculateTournamentPoints(1, Math.max(1, submission.entrantCount ?? 1), formula);
+    await prisma.sessionEntry.update({ where: { sessionId_userId: { sessionId: id, userId: user.id } }, data: { signOutTime: new Date() } });
+    const entries = await prisma.sessionEntry.findMany({ where: { sessionId: id } });
+    const streakBase = formula.STREAK_BASE;
+    const byUser = new Map<string, Array<{ signedOut: boolean; dnf: boolean }>>();
+    for (const entry of entries) {
+      const existing = byUser.get(entry.userId) ?? [];
+      existing.push({ signedOut: Boolean(entry.signOutTime), dnf: entry.finishingPosition === 999_999 });
+      byUser.set(entry.userId, existing);
+    }
+    for (const [userId, sessions] of byUser) {
+      let current = 0;
+      let longest = 0;
+      for (const session of sessions) {
+        if (session.signedOut && !session.dnf) {
+          current += 1;
+          longest = Math.max(longest, current);
+        } else {
+          current = 0;
+        }
+      }
+      await prisma.streak.upsert({
+        where: { playerId_seriesId: { playerId: userId, seriesId: session.seriesId } },
+        update: { currentStreak: current, longestStreak: longest, streakBonus: longest > 0 ? streakBase * longest : 0 },
+        create: { playerId: userId, seriesId: session.seriesId, currentStreak: current, longestStreak: longest, streakBonus: longest > 0 ? streakBase * longest : 0 },
+      });
+    }
+    return { ok: true, approxPoints };
+  });
+
+  app.get("/api/sessions/:id/entries", async (req) => {
+    const { id } = req.params as { id: string };
+    const entries = await prisma.sessionEntry.findMany({
+      where: { sessionId: id },
+      include: { user: { include: { profile: true } } },
+      orderBy: { signInTime: "asc" },
+    });
+    return entries.map((entry) => ({
+      id: entry.id,
+      nickname: entry.user.profile?.nickname ?? entry.user.email,
+      signedIn: Boolean(entry.signInTime),
+      signedOut: Boolean(entry.signOutTime),
+      finishingPosition: entry.finishingPosition,
+      points: entry.points,
+      dnf: entry.finishingPosition === 999_999,
+    }));
+  });
+
   app.get("/api/hall-of-fame", async () => {
     const entries = await prisma.hallOfFameEntry.findMany({
-      include: { season: true },
-      orderBy: { season: { startsAt: "desc" } },
+      include: { series: true },
+      orderBy: { series: { startsAt: "desc" } },
     });
     return entries.map((e) => ({
-      season: e.season.name,
+      season: e.series.name,
       board: e.board,
       nickname: e.nickname,
       value: e.value,
@@ -428,10 +502,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const parts = londonParts(today);
       const session = await prisma.session.upsert({
         where: {
-          seasonId_date_type: { seasonId: season.id, date: today, type: "TOURNAMENT" },
+          seriesId_date_type: { seriesId: season.id, date: today, type: "TOURNAMENT" },
         },
         create: {
-          seasonId: season.id,
+          seriesId: season.id,
           date: today,
           type: "TOURNAMENT",
           code: generateSessionCode(),

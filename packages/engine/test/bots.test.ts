@@ -46,7 +46,7 @@ describe("draw detection", () => {
 });
 
 /** Play N hands of 6 same-tier bots; return measured VPIP/PFR/aggression. */
-function measureTier(tier: BotTier, hands: number, seed: number) {
+async function measureTier(tier: BotTier, hands: number, seed: number) {
   const rng = createSeededRng(seed);
   let vpipCount = 0;
   let pfrCount = 0;
@@ -70,6 +70,9 @@ function measureTier(tier: BotTier, hands: number, seed: number) {
       aggressive += agg.aggressive;
       passive += agg.passive;
     }
+    // Yield to the event loop periodically so vitest's worker RPC
+    // (onTaskUpdate heartbeat) isn't starved during this CPU-heavy loop.
+    if (h % 100 === 0) await new Promise((r) => setImmediate(r));
   }
   return {
     vpip: vpipCount / opportunities,
@@ -81,55 +84,66 @@ function measureTier(tier: BotTier, hands: number, seed: number) {
 describe("statistical tier validation (the P2 bot gate)", () => {
   const HANDS = 5_000;
 
-  it("each tier lands within ±5pts of its VPIP/PFR targets over 5,000 hands", { timeout: 600_000 }, () => {
-    const results: Record<string, { vpip: number; pfr: number; aggressionFactor: number }> = {};
-    for (const tier of ["FISH", "CASUAL", "SOLID", "SHARK"] as const) {
-      const measured = measureTier(tier, HANDS, 0xb07 + tier.length);
-      results[tier] = measured;
-      const target = BOT_TIERS[tier];
-      expect(
-        Math.abs(measured.vpip - target.vpip),
-        `${tier} VPIP ${(measured.vpip * 100).toFixed(1)} vs target ${target.vpip * 100}`,
-      ).toBeLessThanOrEqual(0.05);
-      expect(
-        Math.abs(measured.pfr - target.pfr),
-        `${tier} PFR ${(measured.pfr * 100).toFixed(1)} vs target ${target.pfr * 100}`,
-      ).toBeLessThanOrEqual(0.05);
-    }
-    console.log("tier validation:", JSON.stringify(results, null, 2));
-
-    // Aggression ordering: the strong tiers play more aggressively postflop.
-    expect(results.SHARK!.aggressionFactor).toBeGreaterThan(results.CASUAL!.aggressionFactor);
-    expect(results.SOLID!.aggressionFactor).toBeGreaterThan(results.CASUAL!.aggressionFactor);
-    expect(results.CASUAL!.aggressionFactor).toBeGreaterThan(results.FISH!.aggressionFactor);
-  });
-
-  it("win rates order Shark > Solid > Casual > Fish over 10,000 mixed hands", { timeout: 900_000 }, () => {
-    const rng = createSeededRng(0x0ddba11);
-    const tiers: BotTier[] = ["FISH", "CASUAL", "SOLID", "SHARK"];
-    const net: Record<BotTier, number> = { FISH: 0, CASUAL: 0, SOLID: 0, SHARK: 0 };
-    for (let h = 0; h < 10_000; h++) {
-      // Rotate seats so no tier owns a position.
-      const offset = h % 4;
-      const seats = tiers.map((tier, i) => ({
-        seat: (i + offset) % 4,
-        tier,
-        stack: 10_000,
-      }));
-      const stats = playBotHand({
-        seats,
-        buttonSeat: h % 4,
-        blinds: BLINDS,
-        rng,
-        rollouts: 40,
-      });
-      for (const seatConfig of seats) {
-        net[seatConfig.tier] += stats.netBySeat.get(seatConfig.seat)!;
+  it(
+    "each tier lands within ±5pts of its VPIP/PFR targets over 5,000 hands",
+    { timeout: 600_000 },
+    async () => {
+      const results: Record<string, { vpip: number; pfr: number; aggressionFactor: number }> = {};
+      for (const tier of ["FISH", "CASUAL", "SOLID", "SHARK"] as const) {
+        const measured = await measureTier(tier, HANDS, 0xb07 + tier.length);
+        results[tier] = measured;
+        const target = BOT_TIERS[tier];
+        expect(
+          Math.abs(measured.vpip - target.vpip),
+          `${tier} VPIP ${(measured.vpip * 100).toFixed(1)} vs target ${target.vpip * 100}`,
+        ).toBeLessThanOrEqual(0.05);
+        expect(
+          Math.abs(measured.pfr - target.pfr),
+          `${tier} PFR ${(measured.pfr * 100).toFixed(1)} vs target ${target.pfr * 100}`,
+        ).toBeLessThanOrEqual(0.05);
       }
-    }
-    console.log("win rates (chips over 10k hands):", net);
-    expect(net.SHARK).toBeGreaterThan(net.SOLID);
-    expect(net.SOLID).toBeGreaterThan(net.CASUAL);
-    expect(net.CASUAL).toBeGreaterThan(net.FISH);
-  });
+      console.log("tier validation:", JSON.stringify(results, null, 2));
+
+      // Aggression ordering: the strong tiers play more aggressively postflop.
+      expect(results.SHARK!.aggressionFactor).toBeGreaterThan(results.CASUAL!.aggressionFactor);
+      expect(results.SOLID!.aggressionFactor).toBeGreaterThan(results.CASUAL!.aggressionFactor);
+      expect(results.CASUAL!.aggressionFactor).toBeGreaterThan(results.FISH!.aggressionFactor);
+    },
+  );
+
+  it(
+    "win rates order Shark > Solid > Casual > Fish over 10,000 mixed hands",
+    { timeout: 900_000 },
+    async () => {
+      const rng = createSeededRng(0x0ddba11);
+      const tiers: BotTier[] = ["FISH", "CASUAL", "SOLID", "SHARK"];
+      const net: Record<BotTier, number> = { FISH: 0, CASUAL: 0, SOLID: 0, SHARK: 0 };
+      for (let h = 0; h < 10_000; h++) {
+        // Rotate seats so no tier owns a position.
+        const offset = h % 4;
+        const seats = tiers.map((tier, i) => ({
+          seat: (i + offset) % 4,
+          tier,
+          stack: 10_000,
+        }));
+        const stats = playBotHand({
+          seats,
+          buttonSeat: h % 4,
+          blinds: BLINDS,
+          rng,
+          rollouts: 40,
+        });
+        for (const seatConfig of seats) {
+          net[seatConfig.tier] += stats.netBySeat.get(seatConfig.seat)!;
+        }
+        // Yield to the event loop periodically so vitest's worker RPC
+        // (onTaskUpdate heartbeat) isn't starved during this CPU-heavy loop.
+        if (h % 100 === 0) await new Promise((r) => setImmediate(r));
+      }
+      console.log("win rates (chips over 10k hands):", net);
+      expect(net.SHARK).toBeGreaterThan(net.SOLID);
+      expect(net.SOLID).toBeGreaterThan(net.CASUAL);
+      expect(net.CASUAL).toBeGreaterThan(net.FISH);
+    },
+  );
 });
