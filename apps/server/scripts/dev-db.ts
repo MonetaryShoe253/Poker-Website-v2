@@ -12,19 +12,49 @@ import fs from "node:fs";
 
 const shellExecutable = process.platform === "win32" ? (process.env.ComSpec ?? "cmd.exe") : "/bin/sh";
 
-function runPrismaCommand(command: string): void {
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * On Windows, `prisma generate` replaces the query-engine DLL by renaming a
+ * temp file over it — which fails with EPERM if anything (a leftover dev
+ * server, the Prisma VS Code extension, a real-time antivirus scan) has the
+ * old file briefly locked. Usually transient, so retry a few times before
+ * giving up.
+ */
+function runPrismaCommand(command: string, retries = 4): void {
   const args = process.platform === "win32"
     ? ["/d", "/s", "/c", `pnpm --filter @uos-poker/server ${command}`]
     : ["-lc", `pnpm --filter @uos-poker/server ${command}`];
 
-  execFileSync(shellExecutable, args, {
-    cwd: repoRoot,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      DATABASE_URL: dbUrl,
-    },
-  });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      execFileSync(shellExecutable, args, {
+        cwd: repoRoot,
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          DATABASE_URL: dbUrl,
+        },
+      });
+      return;
+    } catch (err) {
+      if (attempt === retries) {
+        if (process.platform === "win32") {
+          console.error(
+            `\n${command} kept failing after ${retries} attempts — this usually means something ` +
+              "still has the Prisma query engine DLL open. Close any other running dev server " +
+              "(tsx watch / pnpm dev) and try again; if it persists, check the Prisma VS Code " +
+              "extension or antivirus real-time scanning.",
+          );
+        }
+        throw err;
+      }
+      console.log(`${command} hit a locked file (attempt ${attempt}/${retries}) — retrying in 1.5s…`);
+      sleepSync(1500);
+    }
+  }
 }
 
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
