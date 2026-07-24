@@ -74,21 +74,21 @@ export async function getTournamentFormula(): Promise<TournamentFormula> {
   };
 }
 
-export async function ensureFormulaConfigSeed(): Promise<void> {
-  const defaults = [
-    { key: "A", value: "2.5" },
-    { key: "B", value: "0.22" },
-    { key: "ITM_PERCENT", value: "0.2" },
-    { key: "ITM_FLOOR", value: "6" },
-    { key: "SIGNOUT_FLOOR", value: "3" },
-    { key: "STREAK_BASE", value: "2" },
-  ];
+const FORMULA_DEFAULTS = [
+  { key: "A", value: "2.5" },
+  { key: "B", value: "0.22" },
+  { key: "ITM_PERCENT", value: "0.2" },
+  { key: "ITM_FLOOR", value: "6" },
+  { key: "SIGNOUT_FLOOR", value: "3" },
+  { key: "STREAK_BASE", value: "2" },
+];
 
-  for (const config of defaults) {
-    await prisma.formulaConfig.upsert({
-      where: { key: config.key },
-      update: { value: config.value },
-      create: { key: config.key, value: config.value },
-    });
-  }
+/** Seeds default formula values for keys that don't exist yet. Never
+ * overwrites an existing row, so an admin's saved formula survives
+ * restarts and repeat calls. */
+export async function ensureFormulaConfigSeed(): Promise<void> {
+  await prisma.formulaConfig.createMany({
+    data: FORMULA_DEFAULTS,
+    skipDuplicates: true,
+  });
 }
