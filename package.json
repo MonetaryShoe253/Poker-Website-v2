@@ -9,16 +9,6 @@
     "node": ">=22"
   },
   "packageManager": "pnpm@11.15.1",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@embedded-postgres/windows-x64",
-      "@embedded-postgres/linux-x64",
-      "@prisma/client",
-      "@prisma/engines",
-      "esbuild",
-      "prisma"
-    ]
-  },
   "scripts": {
     "dev": "pnpm --parallel --filter @uos-poker/server --filter @uos-poker/web dev",
     "build": "pnpm -r build",
