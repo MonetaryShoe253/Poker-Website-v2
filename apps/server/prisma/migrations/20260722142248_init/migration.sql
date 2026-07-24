@@ -268,7 +268,6 @@ CREATE TABLE "AuditLog" (
     "action" TEXT NOT NULL,
     "detail" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "tdId" TEXT,
     "targetType" TEXT,
     "targetId" TEXT,
     "oldValue" TEXT,
@@ -276,16 +275,6 @@ CREATE TABLE "AuditLog" (
     "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "TdAccount" (
-    "id" TEXT NOT NULL,
-    "username" TEXT NOT NULL,
-    "passwordHash" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "TdAccount_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -353,9 +342,6 @@ CREATE UNIQUE INDEX "FormulaConfig_key_key" ON "FormulaConfig"("key");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "TdAccount_username_key" ON "TdAccount"("username");
 
 -- AddForeignKey
 ALTER TABLE "player" ADD CONSTRAINT "player_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;

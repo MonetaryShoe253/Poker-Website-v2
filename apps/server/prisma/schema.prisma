@@ -319,7 +319,6 @@ model AuditLog {
   action     String
   detail     Json?
   createdAt  DateTime @default(now())
-  tdId       String?
   targetType String?
   targetId   String?
   oldValue   String?
@@ -327,11 +326,4 @@ model AuditLog {
   timestamp  DateTime @default(now())
 
   @@index([createdAt])
-}
-
-model TdAccount {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
 }

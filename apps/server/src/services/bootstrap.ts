@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { prisma } from "../db";
 
 export async function ensureTournamentBootstrap(): Promise<void> {
@@ -18,11 +17,4 @@ export async function ensureTournamentBootstrap(): Promise<void> {
       create: { key: config.key, value: config.value },
     });
   }
-
-  const passwordHash = createHash("sha256").update("changeme123").digest("hex");
-  await prisma.tdAccount.upsert({
-    where: { username: "admin" },
-    update: { passwordHash },
-    create: { username: "admin", passwordHash },
-  });
 }
