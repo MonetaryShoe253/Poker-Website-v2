@@ -13,7 +13,7 @@ interface UpcomingSession {
 export function SessionsPage() {
   usePageMeta(
     "Sessions",
-    "Tuesday tournaments and Thursday cash games, 17:00–20:00 — what to expect at your first UOS Poker session.",
+    "Tuesday tournaments and Thursday cash games, 17:00–20:00: what to expect at your first UOS Poker session.",
   );
   const [upcoming, setUpcoming] = useState<UpcomingSession[]>([]);
   useEffect(() => {
@@ -29,7 +29,7 @@ export function SessionsPage() {
         <SectionTitle kicker="Weekly sessions">Two nights, two games</SectionTitle>
         <p className="mt-3 max-w-2xl text-muted">
           {SOCIETY.sessionTimes} at {SOCIETY.venueName}, {SOCIETY.venueAddress}. Turn up any
-          week — no sign-up needed beyond SU membership, and your first visit can just be a
+          week. No sign-up needed beyond SU membership, and your first visit can just be a
           look around.
         </p>
       </Reveal>
@@ -52,13 +52,13 @@ export function SessionsPage() {
               <div>
                 <dt className="font-display text-muted">What it costs</dt>
                 <dd className="text-text">
-                  Nothing beyond membership — chips are play-money. The prize is points.
+                  Nothing beyond membership. Chips are play-money. The prize is points.
                 </dd>
               </div>
               <div>
                 <dt className="font-display text-muted">Points</dt>
                 <dd className="text-text">
-                  1st&nbsp;10 · 2nd&nbsp;7 · 3rd&nbsp;5 · 4th&nbsp;3 · 5th&nbsp;2 — and a
+                  1st&nbsp;10 · 2nd&nbsp;7 · 3rd&nbsp;5 · 4th&nbsp;3 · 5th&nbsp;2, and a
                   point for everyone else who played. They add up all season on the{" "}
                   <Link to="/leaderboards" className="text-ember underline">
                     Tuesday board
@@ -88,7 +88,7 @@ export function SessionsPage() {
               <div>
                 <dt className="font-display text-muted">The score</dt>
                 <dd className="text-text">
-                  Your net for the night — cash-out minus buy-ins — goes on the{" "}
+                  Your net for the night (cash-out minus buy-ins) goes on the{" "}
                   <Link to="/leaderboards" className="text-ember underline">
                     Thursday board
                   </Link>
@@ -124,8 +124,8 @@ export function SessionsPage() {
                 on your phone, enter the code and your result.
               </li>
               <li>
-                It lands on the leaderboard instantly. One submission per person per session —
-                the committee can fix mistakes.
+                It lands on the leaderboard instantly. One submission per person per session.
+                The committee can fix mistakes.
               </li>
             </ol>
           </div>
@@ -138,9 +138,9 @@ export function SessionsPage() {
           <div className="panel-steel h-full rounded-lg p-6">
             <h3 className="font-display text-lg font-semibold">First time? Bring…</h3>
             <ul className="mt-3 space-y-1.5 text-sm text-muted">
-              <li>— Yourself. Chips, cards and tables are handled.</li>
-              <li>— Your U-Card (room access in the Diamond).</li>
-              <li>— Zero poker knowledge required: read
+              <li>• Yourself. Chips, cards and tables are handled.</li>
+              <li>• Your U-Card (room access in the Diamond).</li>
+              <li>• Zero poker knowledge required: read
                 {" "}<Link to="/learn" className="text-ember underline">the beginner course</Link>{" "}
                 on the bus there and you'll be fine.</li>
             </ul>
@@ -165,7 +165,7 @@ export function SessionsPage() {
                 </li>
               ))}
               {upcoming.length === 0 && (
-                <li className="text-muted">Dates TBA — term schedule lands soon.</li>
+                <li className="text-muted">Dates TBA. Term schedule lands soon.</li>
               )}
             </ul>
           </div>

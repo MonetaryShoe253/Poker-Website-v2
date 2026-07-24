@@ -14,11 +14,11 @@ export function WelcomeEmail({
     <EmailShell preview="You're in. Here's where the chips are.">
       <Text style={headingText}>You're in{name ? `, ${name}` : ""}.</Text>
       <Text style={bodyText}>
-        Welcome to UOS Poker. Two ways to play: in person on campus —{" "}
+        Welcome to UOS Poker. Two ways to play: in person on campus (
         <strong style={{ color: palette.text }}>
           {nextSession ?? "Tuesday tournaments & Thursday cash games, 17:00–20:00"}
-        </strong>{" "}
-        — and online, any hour the mood strikes.
+        </strong>
+        ) and online, any hour the mood strikes.
       </Text>
       <EmberButton href={`${siteUrl}/play`}>DEAL ME IN</EmberButton>
       <Text style={bodyText}>
@@ -31,7 +31,7 @@ export function WelcomeEmail({
         </a>
         <br />
         <a href={`${siteUrl}/sessions`} style={{ color: palette.ember }}>
-          Weekly sessions — what to expect
+          Weekly sessions: what to expect
         </a>
       </Text>
       <Text style={mutedText}>Play-money only. Bring your A-game, not your rent.</Text>

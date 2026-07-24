@@ -92,7 +92,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
       const messages: Record<string, string> = {
         length: "Nicknames are 3–16 characters.",
         charset: "Letters, numbers, _ and - only.",
-        profanity: "Keep it clean — pick something else.",
+        profanity: "Keep it clean. Pick something else.",
         impersonation: "That name's reserved. Pick something else.",
       };
       return reply.code(400).send({ error: messages[verdict.reason] });
@@ -114,7 +114,7 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
       return { ok: true, nickname: profile.nickname };
     } catch (err) {
       if ((err as { code?: string }).code === "P2002") {
-        return reply.code(409).send({ error: "That nickname's taken — try another." });
+        return reply.code(409).send({ error: "That nickname's taken. Try another." });
       }
       throw err;
     }

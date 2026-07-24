@@ -119,7 +119,7 @@ export function PlayPage() {
 
       {me?.user && !me.profile?.nickname ? (
         <div className="panel-steel mt-6 rounded-lg p-6 text-center">
-          <p className="text-muted">One step left — pick the name you'll play under.</p>
+          <p className="text-muted">One step left. Pick the name you'll play under.</p>
           <Link
             to="/onboarding"
             className="mt-3 inline-block rounded bg-ember-deep px-4 py-2 font-display text-sm text-white hover:bg-ember"
@@ -131,7 +131,7 @@ export function PlayPage() {
         <div className="panel-steel mt-6 rounded-lg p-6">
           <h2 className="font-display text-lg">Sign in to play</h2>
           <p className="mt-1 text-sm text-muted">
-            Spectating is open to everyone — taking a seat needs a verified account.
+            Spectating is open to everyone. Taking a seat needs a verified account.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link
@@ -151,7 +151,7 @@ export function PlayPage() {
             <p className="text-xs text-muted">
               {devDoorAllowed
                 ? "Dev door (local only):"
-                : "Just exploring? Try a guest seat — practice tables vs bots, no account:"}
+                : "Just exploring? Try a guest seat, practice tables vs bots, no account:"}
             </p>
             <div className="mt-2 flex gap-2">
               <input
@@ -176,7 +176,7 @@ export function PlayPage() {
           {restrictedGuest && (
             <div className="panel-steel mt-6 rounded-lg border-l-2 border-l-ember p-4">
               <p className="text-sm text-text">
-                You're exploring as a guest — practice tables vs bots only.
+                You're exploring as a guest. Practice tables vs bots only.
               </p>
               <p className="mt-1 text-sm text-muted">
                 <Link to="/auth?mode=signup" className="text-ember underline">

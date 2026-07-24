@@ -42,7 +42,7 @@ export function AuthPage() {
           callbackURL: `${window.location.origin}/onboarding`,
         });
         if (error) {
-          setError(error.message ?? "Sign-up failed — check the details and try again.");
+          setError(error.message ?? "Sign-up failed. Check the details and try again.");
         } else {
           invalidateMe();
           navigate(`/check-inbox?email=${encodeURIComponent(email)}`);
@@ -51,9 +51,9 @@ export function AuthPage() {
         const { error } = await authClient.signIn.email({ email, password });
         if (error) {
           if (error.status === 403) {
-            setNotice("Your email isn't verified yet — check your inbox for the link.");
+            setNotice("Your email isn't verified yet. Check your inbox for the link.");
           } else {
-            setError(error.message ?? "Sign-in failed — check your email and password.");
+            setError(error.message ?? "Sign-in failed. Check your email and password.");
           }
         } else {
           invalidateMe();

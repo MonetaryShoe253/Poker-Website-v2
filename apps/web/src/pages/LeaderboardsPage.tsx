@@ -153,7 +153,7 @@ export function LeaderboardsPage() {
               {tournament.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                    No results yet this season — Tuesday's your chance.
+                    No results yet this season. Tuesday's your chance.
                   </td>
                 </tr>
               )}
@@ -200,7 +200,7 @@ export function LeaderboardsPage() {
               {cash.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                    No results yet this season — Thursday's your chance.
+                    No results yet this season. Thursday's your chance.
                   </td>
                 </tr>
               )}

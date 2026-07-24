@@ -107,7 +107,7 @@ export function attachRealtime(
         sendError({
           code: "NOT_AUTHENTICATED",
           message:
-            "Guests play practice tables only — sign up for ranked seats, a bankroll, and the leaderboards.",
+            "Guests play practice tables only. Sign up for ranked seats, a bankroll, and the leaderboards.",
         });
         return null;
       }

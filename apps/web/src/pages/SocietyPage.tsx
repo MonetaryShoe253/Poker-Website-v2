@@ -15,7 +15,7 @@ export function SocietyPage() {
         <p className="mt-4 max-w-2xl text-muted">{SOCIETY.blurb}</p>
         <p className="mt-2 max-w-2xl text-muted">
           Whether you've never touched a chip or you've got a hoodie-and-sunglasses phase
-          behind you, there's a seat. We run {SOCIETY.sessionTimes.toLowerCase()} — every week
+          behind you, there's a seat. We run {SOCIETY.sessionTimes.toLowerCase()}, every week
           of term.
         </p>
       </Reveal>
@@ -47,7 +47,7 @@ export function SocietyPage() {
             <SectionTitle kicker="The venue">{SOCIETY.venueName}</SectionTitle>
             <p className="mt-3 text-muted">{SOCIETY.venueAddress}</p>
             <p className="mt-2 text-sm text-muted">
-              Sessions run in bookable rooms inside the Diamond — check the society Instagram
+              Sessions run in bookable rooms inside the Diamond. Check the society Instagram
               for the room number each week.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
@@ -76,7 +76,7 @@ export function SocietyPage() {
                 </a>
               ) : (
                 <span>
-                  Contact email <span className="font-display text-muted">TBA</span> — DM the
+                  Contact email <span className="font-display text-muted">TBA</span>. DM the
                   Instagram for now.
                 </span>
               )}
@@ -86,7 +86,7 @@ export function SocietyPage() {
         <Reveal delay={0.1}>
           <div className="panel-steel overflow-hidden rounded-lg">
             <iframe
-              title={`Map — ${SOCIETY.venueName}`}
+              title={`Map: ${SOCIETY.venueName}`}
               src={`https://www.google.com/maps?q=${encodeURIComponent(
                 `${SOCIETY.venueName}, ${SOCIETY.venueAddress}`,
               )}&output=embed`}
@@ -116,10 +116,10 @@ export function SocietyPage() {
                 </a>
                 .
               </li>
-              <li>Turn up on a Tuesday or Thursday — your first night, just watch if you like.</li>
+              <li>Turn up on a Tuesday or Thursday. Your first night, just watch if you like.</li>
               <li>
                 Make an account here to play online and get on the leaderboards. Everything on
-                this site is play-money — no real-money gambling, ever.
+                this site is play-money. No real-money gambling, ever.
               </li>
             </ol>
           </div>

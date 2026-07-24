@@ -20,7 +20,7 @@ export function CheckInboxPage() {
     <section className="mx-auto max-w-md px-4 py-20 text-center">
       <h1 className="font-display text-3xl font-semibold tracking-[0.12em]">CHECK YOUR INBOX</h1>
       <p className="mt-4 text-muted">
-        Your seat is reserved{email ? ` — we've emailed ${email}` : ""}. Click the link inside to
+        Your seat is reserved{email ? `. We've emailed ${email}` : ""}. Click the link inside to
         confirm your email and you're in.
       </p>
       <p className="mt-6 text-sm text-muted">

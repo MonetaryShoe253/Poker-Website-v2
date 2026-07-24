@@ -15,7 +15,7 @@ const RANKINGS: Array<{ name: string; cards: string[]; note: string }> = [
   { name: "Three of a kind", cards: ["7c", "7d", "7h", "Ks", "2c"], note: "Three of a rank." },
   { name: "Two pair", cards: ["Ac", "Ad", "8h", "8s", "3c"], note: "Two ranks, paired." },
   { name: "Pair", cards: ["Jc", "Jd", "Ah", "7s", "2c"], note: "One rank, paired." },
-  { name: "High card", cards: ["Ac", "Qd", "9h", "5s", "3c"], note: "None of the above — best single card plays." },
+  { name: "High card", cards: ["Ac", "Qd", "9h", "5s", "3c"], note: "None of the above: best single card plays." },
 ];
 
 export function CheatSheet({ compact = false }: { compact?: boolean }) {

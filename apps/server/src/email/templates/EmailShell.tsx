@@ -75,7 +75,7 @@ export function EmailShell({ preview, children }: { preview: string; children: R
             <Text style={{ color: palette.muted, fontSize: "12px", margin: 0, lineHeight: "18px" }}>
               University of Sheffield Poker Society
               <br />
-              Play-money only — no real-money gambling on this site.
+              Play-money only. No real-money gambling on this site.
             </Text>
           </Section>
         </Container>

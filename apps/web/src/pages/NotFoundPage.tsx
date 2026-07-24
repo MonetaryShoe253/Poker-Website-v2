@@ -19,7 +19,7 @@ export function NotFoundPage() {
         4<span className="text-ember">0</span>4
       </h1>
       <p className="mt-3 text-muted">
-        Dead hand. This page folded before the flop — check the address, or head back and
+        Dead hand. This page folded before the flop. Check the address, or head back and
         play something better.
       </p>
       <div className="mt-6 flex gap-3">
