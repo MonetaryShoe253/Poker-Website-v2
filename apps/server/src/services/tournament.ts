@@ -4,30 +4,18 @@ export interface TournamentFormula {
   A: number;
   B: number;
   ITM_PERCENT: number;
-  ITM_FLOOR: number;
-  SIGNOUT_FLOOR: number;
   STREAK_BASE: number;
 }
 
+/** floor(A * N * e^(-B*p)) for finishers inside the cutoff, 0 outside it. */
 export function calculateTournamentPoints(
   position: number,
   entrantCount: number,
   formula: TournamentFormula,
 ): number {
-  const scaled = formula.A * Math.pow(position, -formula.B);
-  const expected = scaled * entrantCount;
-  const itmThreshold = Math.max(1, Math.floor(entrantCount * formula.ITM_PERCENT));
-  const itmFloor = Math.max(formula.SIGNOUT_FLOOR, formula.ITM_FLOOR);
-
-  if (position <= itmThreshold) {
-    return Math.max(expected, itmFloor);
-  }
-
-  if (position > itmThreshold) {
-    return Math.max(expected, formula.SIGNOUT_FLOOR);
-  }
-
-  return formula.SIGNOUT_FLOOR;
+  const icmCutoff = Math.max(1, Math.floor(entrantCount * formula.ITM_PERCENT));
+  if (position > icmCutoff) return 0;
+  return Math.floor(formula.A * entrantCount * Math.exp(-formula.B * position));
 }
 
 export function deriveStreaks(
@@ -62,14 +50,12 @@ export function deriveStreaks(
 }
 
 export async function getTournamentFormula(): Promise<TournamentFormula> {
-  const rows = await prisma.formulaConfig.findMany({ where: { key: { in: ["A", "B", "ITM_PERCENT", "ITM_FLOOR", "SIGNOUT_FLOOR", "STREAK_BASE"] } } });
+  const rows = await prisma.formulaConfig.findMany({ where: { key: { in: ["A", "B", "ITM_PERCENT", "STREAK_BASE"] } } });
   const map = new Map(rows.map((row) => [row.key, Number(row.value)]));
   return {
     A: map.get("A") ?? 2.5,
     B: map.get("B") ?? 0.22,
     ITM_PERCENT: map.get("ITM_PERCENT") ?? 0.2,
-    ITM_FLOOR: map.get("ITM_FLOOR") ?? 6,
-    SIGNOUT_FLOOR: map.get("SIGNOUT_FLOOR") ?? 3,
     STREAK_BASE: map.get("STREAK_BASE") ?? 2,
   };
 }
@@ -78,8 +64,6 @@ const FORMULA_DEFAULTS = [
   { key: "A", value: "2.5" },
   { key: "B", value: "0.22" },
   { key: "ITM_PERCENT", value: "0.2" },
-  { key: "ITM_FLOOR", value: "6" },
-  { key: "SIGNOUT_FLOOR", value: "3" },
   { key: "STREAK_BASE", value: "2" },
 ];
 

@@ -2,19 +2,18 @@ import { describe, expect, it } from "vitest";
 import { calculateTournamentPoints, deriveStreaks } from "../src/services/tournament";
 
 describe("tournament formula", () => {
-  it("uses the configured floor and ITM rules", () => {
-    const formula = {
-      A: 2.5,
-      B: 0.22,
-      ITM_PERCENT: 0.2,
-      ITM_FLOOR: 6,
-      SIGNOUT_FLOOR: 3,
-      STREAK_BASE: 2,
-    };
+  const formula = { A: 2.5, B: 0.22, ITM_PERCENT: 0.2, STREAK_BASE: 2 };
 
-    expect(calculateTournamentPoints(1, 30, formula)).toBe(75);
-    expect(calculateTournamentPoints(6, 30, formula)).toBe(50.56709307793715);
-    expect(calculateTournamentPoints(20, 30, formula)).toBe(38.80026254982624);
+  it("scores floor(A * N * e^(-B*p)) for finishers inside the ICM cutoff", () => {
+    expect(calculateTournamentPoints(1, 30, formula)).toBe(60);
+    expect(calculateTournamentPoints(3, 30, formula)).toBe(38);
+    expect(calculateTournamentPoints(6, 30, formula)).toBe(20);
+  });
+
+  it("scores zero once a finisher falls outside the ICM cutoff", () => {
+    // cutoff = floor(30 * 0.2) = 6
+    expect(calculateTournamentPoints(7, 30, formula)).toBe(0);
+    expect(calculateTournamentPoints(20, 30, formula)).toBe(0);
   });
 });
 

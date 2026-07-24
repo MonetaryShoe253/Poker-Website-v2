@@ -238,8 +238,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       A: z.number(),
       B: z.number(),
       ITM_PERCENT: z.number(),
-      ITM_FLOOR: z.number(),
-      SIGNOUT_FLOOR: z.number(),
       STREAK_BASE: z.number(),
     }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad formula." });
