@@ -114,6 +114,9 @@ CREATE TABLE "series" (
     "startsAt" TIMESTAMP(3) NOT NULL,
     "endsAt" TIMESTAMP(3) NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT false,
+    "sessionStartMinutesOfDay" INTEGER,
+    "sessionDurationMinutes" INTEGER,
+    "expectedPlayerCount" INTEGER,
 
     CONSTRAINT "series_pkey" PRIMARY KEY ("id")
 );
@@ -127,6 +130,7 @@ CREATE TABLE "session" (
     "scheduledStartTime" TIMESTAMP(3),
     "actualStartTime" TIMESTAMP(3),
     "estimatedDuration" DOUBLE PRECISION,
+    "expectedPlayerCount" INTEGER,
     "status" "SessionStatus" NOT NULL DEFAULT 'CREATED',
     "activePlayerCount" INTEGER,
     "blindSchedule" JSONB,

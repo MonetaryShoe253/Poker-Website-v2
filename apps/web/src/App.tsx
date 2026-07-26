@@ -21,6 +21,9 @@ const SubmitResultPage = lazy(() =>
 );
 const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 const AdminPage = lazy(() => import("./pages/AdminPage").then((m) => ({ default: m.AdminPage })));
+const ManageTournamentPage = lazy(() =>
+  import("./pages/ManageTournamentPage").then((m) => ({ default: m.ManageTournamentPage })),
+);
 const AuthPage = lazy(() => import("./pages/AuthPage").then((m) => ({ default: m.AuthPage })));
 const CheckInboxPage = lazy(() =>
   import("./pages/CheckInboxPage").then((m) => ({ default: m.CheckInboxPage })),
@@ -79,6 +82,7 @@ export function App() {
           <Route path="submit" element={withSuspense(<SubmitResultPage />)} />
           <Route path="profile" element={withSuspense(<ProfilePage />)} />
           <Route path="admin" element={withSuspense(<AdminPage />)} />
+          <Route path="manage-tournament" element={withSuspense(<ManageTournamentPage />)} />
           <Route path="auth" element={withSuspense(<AuthPage />)} />
           <Route path="check-inbox" element={withSuspense(<CheckInboxPage />)} />
           <Route path="onboarding" element={withSuspense(<OnboardingPage />)} />

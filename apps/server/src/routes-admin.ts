@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { validateNickname } from "@uos-poker/shared";
+import { DNF_CORRECTION_WINDOW_HOURS, DNF_POSITION_SENTINEL, validateNickname } from "@uos-poker/shared";
 import { sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { getLiveStats } from "./realtime/stats";
@@ -17,7 +18,8 @@ import {
   ensureFormulaConfigSeed,
   getTournamentFormula,
 } from "./services/tournament";
-import { londonToUtc } from "./time";
+import { computeSessionTimes, createTournamentSeries } from "./services/tournamentSeries";
+import { londonDateAndMinutesToUtc, londonToUtc } from "./time";
 
 /**
  * The ops cockpit API (§18). Role-gated; every mutation writes an audit row.
@@ -38,10 +40,37 @@ async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<A
   return { userId: session.user.id, email: session.user.email };
 }
 
-async function audit(actorId: string, action: string, detail?: unknown): Promise<void> {
+async function audit(
+  actorId: string,
+  action: string,
+  detail?: unknown,
+  target?: { targetType: string; targetId: string },
+): Promise<void> {
   await prisma.auditLog.create({
-    data: { actorId, action, ...(detail !== undefined ? { detail: detail as object } : {}) },
+    data: {
+      actorId,
+      action,
+      ...(detail !== undefined ? { detail: detail as object } : {}),
+      ...(target ? { targetType: target.targetType, targetId: target.targetId } : {}),
+    },
   });
+}
+
+export type BlindLevel = {
+  level: number;
+  smallBlind: number;
+  bigBlind: number;
+  ante?: number;
+  durationMinutes: number;
+  isBreak?: boolean;
+};
+
+async function getSessionCloseTimestamp(sessionId: string): Promise<Date | null> {
+  const row = await prisma.auditLog.findFirst({
+    where: { action: "session.close", targetType: "session", targetId: sessionId },
+    orderBy: { createdAt: "desc" },
+  });
+  return row?.createdAt ?? null;
 }
 
 type Scheme = { positions: Record<string, number>; participation: number };
@@ -134,8 +163,34 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    await prisma.session.update({ where: { id }, data: { status: "OPEN" } });
-    await audit(admin.userId, "session.open", { sessionId: id });
+    const session = await prisma.session.findUnique({ where: { id }, include: { series: true } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "CREATED" && session.status !== "SCHEDULED") {
+      return reply.code(409).send({ error: "Session already opened." });
+    }
+    const scheduledStartTime =
+      session.series.sessionStartMinutesOfDay !== null
+        ? londonDateAndMinutesToUtc(session.date, session.series.sessionStartMinutesOfDay)
+        : null;
+    const schedule = session.blindSchedule as BlindLevel[] | null;
+    const shouldAutoStartTimer = Boolean(schedule && schedule.length > 0);
+    await prisma.session.update({
+      where: { id },
+      data: {
+        status: "OPEN",
+        scheduledStartTime,
+        estimatedDuration: session.series.sessionDurationMinutes,
+        expectedPlayerCount: session.series.expectedPlayerCount,
+        ...(shouldAutoStartTimer
+          ? { currentBlindLevel: 0, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false }
+          : {}),
+      },
+    });
+    await audit(admin.userId, "session.open", {
+      sessionId: id,
+      snapshotted: scheduledStartTime !== null,
+      timerAutoStarted: shouldAutoStartTimer,
+    });
     return { ok: true };
   });
 
@@ -154,20 +209,27 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const session = await prisma.session.findUnique({ where: { id } });
     if (!session) return reply.code(404).send({ error: "No such session." });
-    await prisma.session.update({ where: { id }, data: { status: "CLOSED" } });
+    const shouldPauseTimer = session.timerStartedAt !== null && !session.isPaused;
+    await prisma.session.update({
+      where: { id },
+      data: {
+        status: "CLOSED",
+        ...(shouldPauseTimer ? { isPaused: true, timerPausedAt: new Date() } : {}),
+      },
+    });
     await prisma.sessionEntry.updateMany({
       where: { sessionId: id, voidedAt: null, finishingPosition: null, signOutTime: null },
-      data: { finishingPosition: 999_999, points: 0 },
+      data: { finishingPosition: DNF_POSITION_SENTINEL, points: 0 },
     });
     const formula = await getTournamentFormula();
     const entries = await prisma.sessionEntry.findMany({ where: { sessionId: id, voidedAt: null } });
     for (const entry of entries) {
-      if (entry.finishingPosition && entry.finishingPosition !== 999_999) {
+      if (entry.finishingPosition && entry.finishingPosition !== DNF_POSITION_SENTINEL) {
         const points = calculateTournamentPoints(entry.finishingPosition, entry.entrantCount ?? 1, formula);
         await prisma.sessionEntry.update({ where: { id: entry.id }, data: { points } });
       }
     }
-    await audit(admin.userId, "session.close", { sessionId: id });
+    await audit(admin.userId, "session.close", { sessionId: id }, { targetType: "session", targetId: id });
     return { ok: true };
   });
 
@@ -188,6 +250,469 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     await prisma.session.update({ where: { id }, data: { status: "ARCHIVED" } });
     await audit(admin.userId, "session.archive", { sessionId: id });
+    return { ok: true };
+  });
+
+  // --- Reverse lifecycle transitions (undo a mistaken click) ---------------------
+
+  app.post("/api/admin/sessions/:id/unarchive", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "ARCHIVED") return reply.code(409).send({ error: "Session isn't archived." });
+    await prisma.session.update({ where: { id }, data: { status: "CLOSED" } });
+    await audit(admin.userId, "session.unarchive", { sessionId: id });
+    return { ok: true };
+  });
+
+  app.post("/api/admin/sessions/:id/reopen", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "CLOSED") return reply.code(409).send({ error: "Session isn't closed." });
+    await prisma.session.update({ where: { id }, data: { status: "LATE_REG_CLOSED" } });
+    // Undo the auto-DNF the close route applies to anyone still seated — they were never
+    // actually finished, closing was a mistake being reversed.
+    await prisma.sessionEntry.updateMany({
+      where: { sessionId: id, voidedAt: null, finishingPosition: DNF_POSITION_SENTINEL, signOutTime: null },
+      data: { finishingPosition: null, points: null },
+    });
+    await audit(admin.userId, "session.reopen", { sessionId: id });
+    return { ok: true };
+  });
+
+  app.post("/api/admin/sessions/:id/reopen-registration", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "LATE_REG_CLOSED") {
+      return reply.code(409).send({ error: "Late registration isn't closed." });
+    }
+    await prisma.session.update({ where: { id }, data: { status: "OPEN" } });
+    await audit(admin.userId, "session.reopenRegistration", { sessionId: id });
+    return { ok: true };
+  });
+
+  app.post("/api/admin/sessions/:id/unopen", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "OPEN") return reply.code(409).send({ error: "Session isn't open." });
+    await prisma.session.update({
+      where: { id },
+      data: {
+        status: "SCHEDULED",
+        scheduledStartTime: null,
+        estimatedDuration: null,
+        expectedPlayerCount: null,
+        currentBlindLevel: 0,
+        timerStartedAt: null,
+        timerPausedAt: null,
+        isPaused: false,
+      },
+    });
+    await audit(admin.userId, "session.unopen", { sessionId: id });
+    return { ok: true };
+  });
+
+  // --- Tournament management (series/session drill-down, blind timer, entry overrides) ---------
+
+  app.get("/api/admin/series/:seriesId/sessions", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { seriesId } = req.params as { seriesId: string };
+    const sessions = await prisma.session.findMany({
+      where: { seriesId, type: "TOURNAMENT" },
+      orderBy: { date: "asc" },
+      include: { _count: { select: { entries: { where: { voidedAt: null } } } } },
+    });
+    return sessions.map((s, i) => ({
+      id: s.id,
+      type: s.type,
+      date: s.date,
+      status: s.status,
+      ordinal: i + 1,
+      entryCount: s._count.entries,
+      activePlayerCount: s.activePlayerCount,
+    }));
+  });
+
+  app.get("/api/admin/sessions/:id", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id }, include: { series: true } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    const [seriesSessions, closedAt] = await Promise.all([
+      prisma.session.findMany({
+        where: { seriesId: session.seriesId, type: "TOURNAMENT" },
+        orderBy: { date: "asc" },
+        select: { id: true },
+      }),
+      getSessionCloseTimestamp(id),
+    ]);
+    const ordinalIndex = seriesSessions.findIndex((s) => s.id === id);
+    const times = computeSessionTimes(session, session.series);
+    return {
+      id: session.id,
+      seriesId: session.seriesId,
+      seriesName: session.series.name,
+      type: session.type,
+      date: session.date,
+      status: session.status,
+      code: session.code,
+      ordinal: ordinalIndex === -1 ? null : ordinalIndex + 1,
+      activePlayerCount: session.activePlayerCount,
+      blindSchedule: session.blindSchedule as BlindLevel[] | null,
+      currentBlindLevel: session.currentBlindLevel,
+      timerStartedAt: session.timerStartedAt,
+      timerPausedAt: session.timerPausedAt,
+      isPaused: session.isPaused,
+      submissionsOpenAt: session.submissionsOpenAt,
+      submissionsCloseAt: session.submissionsCloseAt,
+      closedAt,
+      scheduledStartAt: times.scheduledStartAt,
+      lateRegClosesAt: times.lateRegClosesAt,
+      estimatedEndAt: times.estimatedEndAt,
+      expectedPlayerCount: times.expectedPlayerCount,
+    };
+  });
+
+  app.get("/api/admin/sessions/:id/entries", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const entries = await prisma.sessionEntry.findMany({
+      where: { sessionId: id },
+      include: { user: { include: { profile: true } } },
+      orderBy: { signInTime: "asc" },
+    });
+    return entries.map((e) => ({
+      id: e.id,
+      userId: e.userId,
+      nickname: e.user.profile?.nickname ?? e.user.email,
+      email: e.user.email,
+      signInTime: e.signInTime,
+      signOutTime: e.signOutTime,
+      finishingPosition: e.finishingPosition,
+      entrantCount: e.entrantCount,
+      points: e.points,
+      isDNF: e.finishingPosition === DNF_POSITION_SENTINEL,
+      voided: e.voidedAt !== null,
+      voidedAt: e.voidedAt,
+      createdAt: e.createdAt,
+      updatedAt: e.updatedAt,
+    }));
+  });
+
+  const BlindLevelSchema = z.object({
+    level: z.number().int().min(0),
+    smallBlind: z.number().int().min(0),
+    bigBlind: z.number().int().min(0),
+    ante: z.number().int().min(0).optional(),
+    durationMinutes: z.number().int().min(1),
+    isBreak: z.boolean().optional(),
+  });
+  app.put("/api/admin/sessions/:id/blind-schedule", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ levels: z.array(BlindLevelSchema) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad blind schedule." });
+    const levels: BlindLevel[] = parsed.data.levels.map((l, i) => ({ ...l, level: i }));
+    await prisma.session.update({
+      where: { id },
+      data: { blindSchedule: levels.length > 0 ? levels : Prisma.JsonNull },
+    });
+    await audit(admin.userId, "session.blindSchedule.set", { sessionId: id, levelCount: levels.length });
+    return { ok: true, blindSchedule: levels };
+  });
+
+  app.post("/api/admin/sessions/:id/timer/start", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "OPEN" && session.status !== "LATE_REG_CLOSED") {
+      return reply.code(409).send({ error: "Session must be open before starting the timer." });
+    }
+    const schedule = session.blindSchedule as BlindLevel[] | null;
+    if (!schedule || schedule.length === 0) {
+      return reply.code(400).send({ error: "Set a blind schedule first." });
+    }
+    const updated = await prisma.session.update({
+      where: { id },
+      data: { currentBlindLevel: 0, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false },
+    });
+    await audit(admin.userId, "session.timer.start", { sessionId: id });
+    return {
+      ok: true,
+      currentBlindLevel: updated.currentBlindLevel,
+      timerStartedAt: updated.timerStartedAt,
+      timerPausedAt: updated.timerPausedAt,
+      isPaused: updated.isPaused,
+    };
+  });
+
+  app.post("/api/admin/sessions/:id/timer/pause", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (!session.timerStartedAt || session.isPaused) {
+      return reply.code(409).send({ error: "Timer isn't running." });
+    }
+    const updated = await prisma.session.update({
+      where: { id },
+      data: { isPaused: true, timerPausedAt: new Date() },
+    });
+    await audit(admin.userId, "session.timer.pause", { sessionId: id });
+    return { ok: true, isPaused: updated.isPaused, timerPausedAt: updated.timerPausedAt };
+  });
+
+  app.post("/api/admin/sessions/:id/timer/resume", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (!session.isPaused || !session.timerPausedAt || !session.timerStartedAt) {
+      return reply.code(409).send({ error: "Timer isn't paused." });
+    }
+    const pausedMs = Date.now() - session.timerPausedAt.getTime();
+    const shiftedStart = new Date(session.timerStartedAt.getTime() + pausedMs);
+    const updated = await prisma.session.update({
+      where: { id },
+      data: { timerStartedAt: shiftedStart, timerPausedAt: null, isPaused: false },
+    });
+    await audit(admin.userId, "session.timer.resume", { sessionId: id });
+    return { ok: true, timerStartedAt: updated.timerStartedAt, isPaused: updated.isPaused };
+  });
+
+  app.post("/api/admin/sessions/:id/timer/advance", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ level: z.number().int().min(0).optional() }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "Bad level." });
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    const schedule = session.blindSchedule as BlindLevel[] | null;
+    if (!schedule || schedule.length === 0) {
+      return reply.code(400).send({ error: "Set a blind schedule first." });
+    }
+    const target = parsed.data.level ?? session.currentBlindLevel + 1;
+    if (target < 0 || target >= schedule.length) {
+      return reply.code(400).send({ error: "Already at the final level." });
+    }
+    const updated = await prisma.session.update({
+      where: { id },
+      data: { currentBlindLevel: target, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false },
+    });
+    await audit(admin.userId, "session.timer.advance", {
+      sessionId: id,
+      fromLevel: session.currentBlindLevel,
+      toLevel: target,
+    });
+    return { ok: true, currentBlindLevel: updated.currentBlindLevel, timerStartedAt: updated.timerStartedAt };
+  });
+
+  const PointsEditBody = z.object({
+    finishingPosition: z
+      .number()
+      .int()
+      .min(1)
+      .refine((v) => v !== DNF_POSITION_SENTINEL, "Use the DNF routes to mark a DNF."),
+    entrantCount: z.number().int().min(2).optional(),
+  });
+  app.patch("/api/admin/session-entries/:id/points", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = PointsEditBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad points edit." });
+    const existing = await prisma.sessionEntry.findUnique({ where: { id }, include: { session: true } });
+    if (!existing) return reply.code(404).send({ error: "No such entry." });
+    if (existing.session.type !== "TOURNAMENT") {
+      return reply.code(400).send({ error: "Not a tournament session." });
+    }
+    let entrantCount = parsed.data.entrantCount ?? existing.entrantCount;
+    if (!entrantCount) {
+      entrantCount = await prisma.sessionEntry.count({
+        where: { sessionId: existing.sessionId, voidedAt: null },
+      });
+    }
+    const formula = await getTournamentFormula();
+    const points = calculateTournamentPoints(parsed.data.finishingPosition, entrantCount, formula);
+    const updated = await prisma.sessionEntry.update({
+      where: { id },
+      data: { finishingPosition: parsed.data.finishingPosition, entrantCount, points },
+    });
+    await audit(
+      admin.userId,
+      "sessionEntry.points.edit",
+      {
+        sessionEntryId: id,
+        sessionId: existing.sessionId,
+        from: { finishingPosition: existing.finishingPosition, points: existing.points },
+        to: { finishingPosition: updated.finishingPosition, entrantCount: updated.entrantCount, points: updated.points },
+      },
+      { targetType: "sessionEntry", targetId: id },
+    );
+    return {
+      ok: true,
+      entry: { id: updated.id, finishingPosition: updated.finishingPosition, entrantCount: updated.entrantCount, points: updated.points },
+    };
+  });
+
+  async function assertWithinDnfWindow(sessionId: string, reply: FastifyReply): Promise<boolean> {
+    const session = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) {
+      void reply.code(404).send({ error: "No such session." });
+      return false;
+    }
+    if (session.status !== "CLOSED" && session.status !== "ARCHIVED") {
+      void reply.code(409).send({ error: "Session must be closed first." });
+      return false;
+    }
+    const closedAt = await getSessionCloseTimestamp(sessionId);
+    if (closedAt && Date.now() - closedAt.getTime() > DNF_CORRECTION_WINDOW_HOURS * 3_600_000) {
+      void reply.code(403).send({ error: "The 48-hour correction window has closed." });
+      return false;
+    }
+    return true;
+  }
+
+  app.post("/api/admin/session-entries/:id/dnf", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const existing = await prisma.sessionEntry.findUnique({ where: { id }, include: { session: true } });
+    if (!existing) return reply.code(404).send({ error: "No such entry." });
+    if (existing.session.type !== "TOURNAMENT") {
+      return reply.code(400).send({ error: "Not a tournament session." });
+    }
+    if (!(await assertWithinDnfWindow(existing.sessionId, reply))) return;
+    await prisma.sessionEntry.update({
+      where: { id },
+      data: { finishingPosition: DNF_POSITION_SENTINEL, points: 0 },
+    });
+    await audit(
+      admin.userId,
+      "sessionEntry.dnf.mark",
+      { sessionEntryId: id, sessionId: existing.sessionId },
+      { targetType: "sessionEntry", targetId: id },
+    );
+    return { ok: true, entry: { id, finishingPosition: DNF_POSITION_SENTINEL, points: 0, isDNF: true } };
+  });
+
+  app.delete("/api/admin/session-entries/:id/dnf", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const existing = await prisma.sessionEntry.findUnique({ where: { id }, include: { session: true } });
+    if (!existing) return reply.code(404).send({ error: "No such entry." });
+    if (existing.session.type !== "TOURNAMENT") {
+      return reply.code(400).send({ error: "Not a tournament session." });
+    }
+    if (existing.finishingPosition !== DNF_POSITION_SENTINEL) {
+      return reply.code(409).send({ error: "Entry isn't marked DNF." });
+    }
+    if (!(await assertWithinDnfWindow(existing.sessionId, reply))) return;
+    await prisma.sessionEntry.update({ where: { id }, data: { finishingPosition: null, points: null } });
+    await audit(
+      admin.userId,
+      "sessionEntry.dnf.unmark",
+      { sessionEntryId: id, sessionId: existing.sessionId },
+      { targetType: "sessionEntry", targetId: id },
+    );
+    return { ok: true, entry: { id, finishingPosition: null, points: null, isDNF: false } };
+  });
+
+  const CreateTournamentSeriesBody = z.object({
+    name: z.string().min(1).max(60),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    sessionStartMinutesOfDay: z.number().int().min(0).max(1439),
+    sessionDurationMinutes: z.number().int().min(1),
+    expectedPlayerCount: z.number().int().min(1),
+  });
+  app.post("/api/admin/tournament-series", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const parsed = CreateTournamentSeriesBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad series parameters." });
+    const { id, sessionCount } = await createTournamentSeries(parsed.data);
+    await audit(admin.userId, "tournamentSeries.create", { seriesId: id, name: parsed.data.name, sessionCount });
+    return { ok: true, id, sessionCount };
+  });
+
+  app.get("/api/admin/tournament-series/:id", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const series = await prisma.series.findUnique({ where: { id } });
+    if (!series) return reply.code(404).send({ error: "No such series." });
+    return {
+      id: series.id,
+      name: series.name,
+      startsAt: series.startsAt,
+      endsAt: series.endsAt,
+      status: series.status,
+      isActive: series.isActive,
+      sessionStartMinutesOfDay: series.sessionStartMinutesOfDay,
+      sessionDurationMinutes: series.sessionDurationMinutes,
+      expectedPlayerCount: series.expectedPlayerCount,
+    };
+  });
+
+  const TournamentSeriesParamsBody = z.object({
+    sessionStartMinutesOfDay: z.number().int().min(0).max(1439),
+    sessionDurationMinutes: z.number().int().min(1),
+    expectedPlayerCount: z.number().int().min(1),
+  });
+  app.put("/api/admin/tournament-series/:id/params", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = TournamentSeriesParamsBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad series parameters." });
+    const series = await prisma.series.findUnique({ where: { id } });
+    if (!series) return reply.code(404).send({ error: "No such series." });
+    await prisma.series.update({ where: { id }, data: parsed.data });
+    await audit(admin.userId, "tournamentSeries.updateParams", { seriesId: id, ...parsed.data });
+    return { ok: true };
+  });
+
+  app.delete("/api/admin/tournament-series/:id", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const series = await prisma.series.findUnique({ where: { id } });
+    if (!series) return reply.code(404).send({ error: "No such series." });
+    await prisma.series.delete({ where: { id } });
+    await audit(admin.userId, "tournamentSeries.delete", { seriesId: id, name: series.name });
+    return { ok: true };
+  });
+
+  app.delete("/api/admin/sessions/:id", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    await prisma.session.delete({ where: { id } });
+    await audit(admin.userId, "session.delete", { sessionId: id }, { targetType: "session", targetId: id });
     return { ok: true };
   });
 

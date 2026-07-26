@@ -109,6 +109,9 @@ export const SESSION_CODE_LENGTH = 6;
 /** Submission window on the session day, Europe/London. */
 export const SUBMISSION_WINDOW = { openHour: 17, closeHour: 23, closeMinute: 59 } as const;
 
+/** Fixed late-registration window for tournament series — not per-series yet. */
+export const TOURNAMENT_LATE_REG_WINDOW_MINUTES = 70;
+
 /** Default tournament points scheme; per-season copies are admin-editable. */
 export const DEFAULT_POINTS_SCHEME = {
   positions: { 1: 10, 2: 7, 3: 5, 4: 3, 5: 2 } as Record<number, number>,
@@ -117,6 +120,12 @@ export const DEFAULT_POINTS_SCHEME = {
 
 /** Cash submissions with |net| above this ask "looks big — sure?" (never block). */
 export const CASH_NET_SOFT_LIMIT = 2_000;
+
+/** Sentinel finishingPosition marking a DNF (did-not-finish/sign-out). */
+export const DNF_POSITION_SENTINEL = 999_999;
+
+/** Window after session close during which admins can still edit DNF status. */
+export const DNF_CORRECTION_WINDOW_HOURS = 48;
 
 // ---------------------------------------------------------------------------
 // Identity & chat

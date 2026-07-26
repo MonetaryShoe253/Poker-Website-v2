@@ -84,3 +84,14 @@ export function addLondonDays(date: Date, days: number): Date {
   const midnight = londonMidnight(date);
   return londonMidnight(new Date(midnight.getTime() + days * 86_400_000 + 12 * 3_600_000));
 }
+
+/**
+ * Combine a calendar date with a "minutes since midnight, Europe/London"
+ * time-of-day into the correct absolute UTC instant. DST-safe because it
+ * re-resolves through londonToUtc's own two-pass correction rather than
+ * assuming a fixed offset carried over from `date`.
+ */
+export function londonDateAndMinutesToUtc(date: Date, minutesOfDay: number): Date {
+  const { year, month, day } = londonParts(date);
+  return londonToUtc(year, month, day, Math.floor(minutesOfDay / 60), minutesOfDay % 60, 0);
+}

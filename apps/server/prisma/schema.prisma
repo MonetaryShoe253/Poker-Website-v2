@@ -153,6 +153,12 @@ model Series {
   endsAt           DateTime
   isActive         Boolean      @default(false)
 
+  // Tournament-series template — minutes since midnight (Europe/London), minutes,
+  // and a headcount estimate applied to every not-yet-opened session in the series.
+  sessionStartMinutesOfDay Int?
+  sessionDurationMinutes   Int?
+  expectedPlayerCount      Int?
+
   sessions     Session[]
   streaks      Streak[]
   pointsScheme PointsScheme?
@@ -170,6 +176,7 @@ model Session {
   scheduledStartTime DateTime?
   actualStartTime   DateTime?
   estimatedDuration Float?
+  expectedPlayerCount Int?
   status            SessionStatus @default(CREATED)
   activePlayerCount Int?
   blindSchedule     Json?

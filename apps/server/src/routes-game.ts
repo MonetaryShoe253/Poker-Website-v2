@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { BANKROLL, ELO } from "@uos-poker/shared";
+import { BANKROLL, DNF_POSITION_SENTINEL, ELO } from "@uos-poker/shared";
 import { sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { isProd } from "./env";
 import { adjustBankroll, hydrateBankroll } from "./realtime/users";
+import type { BlindLevel } from "./routes-admin";
 import { ensureActiveSeason, generateSessionCode } from "./services/seasons";
 import { calculateTournamentPoints, getTournamentFormula } from "./services/tournament";
 import { addLondonDays, londonMidnight, londonParts, londonToUtc } from "./time";
@@ -376,7 +377,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     const byUser = new Map<string, Array<{ signedOut: boolean; dnf: boolean }>>();
     for (const entry of entries) {
       const existing = byUser.get(entry.userId) ?? [];
-      existing.push({ signedOut: Boolean(entry.signOutTime), dnf: entry.finishingPosition === 999_999 });
+      existing.push({ signedOut: Boolean(entry.signOutTime), dnf: entry.finishingPosition === DNF_POSITION_SENTINEL });
       byUser.set(entry.userId, existing);
     }
     for (const [userId, sessions] of byUser) {
@@ -413,8 +414,23 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       signedOut: Boolean(entry.signOutTime),
       finishingPosition: entry.finishingPosition,
       points: entry.points,
-      dnf: entry.finishingPosition === 999_999,
+      dnf: entry.finishingPosition === DNF_POSITION_SENTINEL,
     }));
+  });
+
+  app.get("/api/sessions/:id/tournament-info", async (req) => {
+    const { id } = req.params as { id: string };
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return { status: null };
+    return {
+      status: session.status,
+      activePlayerCount: session.activePlayerCount,
+      blindSchedule: session.blindSchedule as BlindLevel[] | null,
+      currentBlindLevel: session.currentBlindLevel,
+      timerStartedAt: session.timerStartedAt,
+      timerPausedAt: session.timerPausedAt,
+      isPaused: session.isPaused,
+    };
   });
 
   app.get("/api/hall-of-fame", async () => {
