@@ -93,7 +93,6 @@ export async function registerApiRoutes(app: FastifyInstance): Promise<void> {
         length: "Nicknames are 3–16 characters.",
         charset: "Letters, numbers, _ and - only.",
         profanity: "Keep it clean. Pick something else.",
-        impersonation: "That name's reserved. Pick something else.",
       };
       return reply.code(400).send({ error: messages[verdict.reason] });
     }

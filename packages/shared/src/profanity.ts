@@ -61,25 +61,6 @@ const BLOCKLIST = [
   "nazi",
 ];
 
-/** Blocked as a whole nickname or as a substring (impersonation / authority). */
-const IMPERSONATION_SUBSTRINGS = ["admin", "uospoker", "moderator", "official"];
-
-/** Blocked only as the entire nickname (committee first names from §22). */
-const IMPERSONATION_EXACT = [
-  "kiran",
-  "milan",
-  "kit",
-  "kat",
-  "izzy",
-  "ethan",
-  "callum",
-  "mia",
-  "ellie",
-  "billy",
-  "andy",
-  "harry",
-];
-
 export function containsProfanity(input: string): boolean {
   const normalized = normalizeForFilter(input);
   return BLOCKLIST.some((word) => normalized.includes(word));
@@ -94,9 +75,7 @@ export function filterProfanity(message: string): string {
     .join("");
 }
 
-export type NicknameVerdict =
-  | { ok: true }
-  | { ok: false; reason: "length" | "charset" | "profanity" | "impersonation" };
+export type NicknameVerdict = { ok: true } | { ok: false; reason: "length" | "charset" | "profanity" };
 
 export function validateNickname(nickname: string): NicknameVerdict {
   if (nickname.length < NICKNAME.min || nickname.length > NICKNAME.max) {
@@ -107,13 +86,6 @@ export function validateNickname(nickname: string): NicknameVerdict {
   }
   if (containsProfanity(nickname)) {
     return { ok: false, reason: "profanity" };
-  }
-  const normalized = normalizeForFilter(nickname);
-  if (IMPERSONATION_SUBSTRINGS.some((word) => normalized.includes(word))) {
-    return { ok: false, reason: "impersonation" };
-  }
-  if (IMPERSONATION_EXACT.includes(normalized)) {
-    return { ok: false, reason: "impersonation" };
   }
   return { ok: true };
 }
