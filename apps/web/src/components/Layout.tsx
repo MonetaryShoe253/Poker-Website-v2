@@ -30,7 +30,7 @@ const navItems = [
 ];
 
 function AuthMenu() {
-  const { me, loading, refresh } = useMe();
+  const { me, loading } = useMe();
   const navigate = useNavigate();
   if (loading) return null;
   if (!me?.user) {
@@ -52,9 +52,8 @@ function AuthMenu() {
         className="text-muted underline hover:text-text"
         onClick={() => {
           void authClient.signOut().then(() => {
-            invalidateMe();
+            void invalidateMe();
             resetSocket();
-            void refresh();
             navigate("/");
           });
         }}
@@ -66,6 +65,12 @@ function AuthMenu() {
 }
 
 export function Layout() {
+  const { me } = useMe();
+  const items =
+    me?.user?.role === "ADMIN"
+      ? [...navItems, { to: "/manage-tournament", label: "Tournament management" }]
+      : navItems;
+
   return (
     <div className="flex min-h-screen flex-col bg-bg-0 text-text">
       <header className="fixed inset-x-0 top-0 z-50 bg-bg-0/90 backdrop-blur">
@@ -74,7 +79,7 @@ export function Layout() {
             <Wordmark />
           </Link>
           <ul className="-mx-1 flex w-full items-center gap-0.5 overflow-x-auto text-sm sm:mx-0 sm:w-auto sm:gap-1">
-            {navItems.map((item) => (
+            {items.map((item) => (
               <li key={item.to} className="shrink-0">
                 <NavLink
                   to={item.to}

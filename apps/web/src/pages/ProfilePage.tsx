@@ -35,7 +35,7 @@ function Sparkline({ points }: { points: EloPoint[] }) {
 }
 
 export function ProfilePage() {
-  const { me, loading, refresh } = useMe();
+  const { me, loading } = useMe();
   const [history, setHistory] = useState<EloPoint[]>([]);
   const [nickname, setNickname] = useState("");
   const [avatarId, setAvatarId] = useState("");
@@ -78,8 +78,7 @@ export function ProfilePage() {
       setMessage(data.error ?? "Couldn't save.");
       return;
     }
-    invalidateMe();
-    await refresh();
+    await invalidateMe();
     setMessage("Saved.");
   };
 

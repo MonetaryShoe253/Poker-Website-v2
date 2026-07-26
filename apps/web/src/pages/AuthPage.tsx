@@ -44,7 +44,7 @@ export function AuthPage() {
         if (error) {
           setError(error.message ?? "Sign-up failed. Check the details and try again.");
         } else {
-          invalidateMe();
+          void invalidateMe();
           navigate(`/check-inbox?email=${encodeURIComponent(email)}`);
         }
       } else {
@@ -56,7 +56,7 @@ export function AuthPage() {
             setError(error.message ?? "Sign-in failed. Check your email and password.");
           }
         } else {
-          invalidateMe();
+          void invalidateMe();
           navigate("/play");
         }
       }

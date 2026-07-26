@@ -4,7 +4,7 @@ import { invalidateMe, useMe } from "../lib/useMe";
 import { resetSocket } from "../lib/socket";
 
 export function OnboardingPage() {
-  const { me, loading, refresh } = useMe();
+  const { me, loading } = useMe();
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,8 +40,7 @@ export function OnboardingPage() {
         setError(data.error ?? "That didn't work. Try another nickname.");
         return;
       }
-      invalidateMe();
-      await refresh();
+      await invalidateMe();
       resetSocket();
       navigate("/play");
     } finally {
