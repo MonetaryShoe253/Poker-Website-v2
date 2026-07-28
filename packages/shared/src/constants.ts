@@ -112,6 +112,47 @@ export const SUBMISSION_WINDOW = { openHour: 17, closeHour: 23, closeMinute: 59 
 /** Fixed late-registration window for tournament series — not per-series yet. */
 export const TOURNAMENT_LATE_REG_WINDOW_MINUTES = 70;
 
+export interface TournamentBlindLevel {
+  level: number;
+  smallBlind: number;
+  bigBlind: number;
+  ante?: number;
+  durationMinutes: number;
+  isBreak?: boolean;
+}
+
+/** Starting stack and chip denominations for the fixed tournament structure below. */
+export const TOURNAMENT_STARTING_STACK = 30_000;
+export const TOURNAMENT_CHIP_DENOMINATIONS = [100, 500, 1_000, 5_000, 25_000] as const;
+
+const REGULAR_LEVEL_MINUTES = 15;
+
+/**
+ * Fixed blind structure for every in-person tournament — no per-field-size
+ * auto-calculation yet, so every session uses the same schedule.
+ */
+export const FIXED_TOURNAMENT_BLIND_SCHEDULE: TournamentBlindLevel[] = [
+  { level: 0, smallBlind: 100, bigBlind: 200, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 1, smallBlind: 200, bigBlind: 400, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 2, smallBlind: 300, bigBlind: 600, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 3, smallBlind: 400, bigBlind: 800, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 4, smallBlind: 0, bigBlind: 0, durationMinutes: 5, isBreak: true },
+  { level: 5, smallBlind: 500, bigBlind: 1_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 6, smallBlind: 700, bigBlind: 1_400, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 7, smallBlind: 1_000, bigBlind: 2_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 8, smallBlind: 1_500, bigBlind: 3_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 9, smallBlind: 2_000, bigBlind: 4_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 10, smallBlind: 3_000, bigBlind: 6_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 11, smallBlind: 0, bigBlind: 0, durationMinutes: 10, isBreak: true },
+  { level: 12, smallBlind: 4_000, bigBlind: 8_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 13, smallBlind: 7_500, bigBlind: 15_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 14, smallBlind: 10_000, bigBlind: 20_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 15, smallBlind: 15_000, bigBlind: 30_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 16, smallBlind: 20_000, bigBlind: 40_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 17, smallBlind: 30_000, bigBlind: 60_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+  { level: 18, smallBlind: 50_000, bigBlind: 100_000, durationMinutes: REGULAR_LEVEL_MINUTES },
+];
+
 /** Default tournament points scheme; per-season copies are admin-editable. */
 export const DEFAULT_POINTS_SCHEME = {
   positions: { 1: 10, 2: 7, 3: 5, 4: 3, 5: 2 } as Record<number, number>,

@@ -6,7 +6,6 @@ interface SeriesDetail {
   name: string;
   sessionStartMinutesOfDay: number | null;
   sessionDurationMinutes: number | null;
-  expectedPlayerCount: number | null;
 }
 
 function minutesOfDayToTime(minutes: number): string {
@@ -29,7 +28,6 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
   const [startTime, setStartTime] = useState("17:00");
   const [durationHours, setDurationHours] = useState("0");
   const [durationMinutes, setDurationMinutes] = useState("0");
-  const [expectedPlayerCount, setExpectedPlayerCount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -41,7 +39,6 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
         setDurationHours(String(Math.floor(d.sessionDurationMinutes / 60)));
         setDurationMinutes(String(d.sessionDurationMinutes % 60));
       }
-      if (d.expectedPlayerCount !== null) setExpectedPlayerCount(String(d.expectedPlayerCount));
     });
   }, [seriesId]);
   useEffect(load, [load]);
@@ -52,7 +49,7 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
     return (
       <div className="panel-steel mt-4 rounded-lg p-4 text-sm text-muted">
         Legacy season — no tournament template. Only series created via "New tournament series"
-        have editable start time / duration / expected players.
+        have editable start time / duration.
       </div>
     );
   }
@@ -60,18 +57,15 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
   const save = () => {
     const sessionStartMinutesOfDay = timeToMinutesOfDay(startTime);
     const sessionDurationMinutes = Number(durationHours) * 60 + Number(durationMinutes);
-    const expected = Number(expectedPlayerCount);
     if (sessionStartMinutesOfDay === null) return setError("Enter a valid start time.");
     if (!Number.isInteger(sessionDurationMinutes) || sessionDurationMinutes < 1) {
       return setError("Enter a valid duration.");
     }
-    if (!Number.isInteger(expected) || expected < 1) return setError("Enter a valid expected player count.");
     void api(`/api/admin/tournament-series/${seriesId}/params`, {
       method: "PUT",
       body: JSON.stringify({
         sessionStartMinutesOfDay,
         sessionDurationMinutes,
-        expectedPlayerCount: expected,
       }),
     })
       .then(() => {
@@ -91,7 +85,7 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
       <p className="mt-1 text-xs text-muted">
         Applies to every not-yet-opened session in this series immediately on save.
       </p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <label className="text-xs text-muted">
           Session start time
           <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={`${inputCls} mt-1 w-full`} />
@@ -102,14 +96,6 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
             <input value={durationHours} onChange={(e) => setDurationHours(e.target.value)} className={`${inputCls} w-full`} />
             <input value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} className={`${inputCls} w-full`} />
           </div>
-        </label>
-        <label className="text-xs text-muted">
-          Expected players
-          <input
-            value={expectedPlayerCount}
-            onChange={(e) => setExpectedPlayerCount(e.target.value)}
-            className={`${inputCls} mt-1 w-full`}
-          />
         </label>
       </div>
       {error && <p className="mt-2 text-sm text-ember">{error}</p>}

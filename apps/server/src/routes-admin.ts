@@ -180,7 +180,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         status: "OPEN",
         scheduledStartTime,
         estimatedDuration: session.series.sessionDurationMinutes,
-        expectedPlayerCount: session.series.expectedPlayerCount,
         ...(shouldAutoStartTimer
           ? { currentBlindLevel: 0, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false }
           : {}),
@@ -312,7 +311,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         status: "SCHEDULED",
         scheduledStartTime: null,
         estimatedDuration: null,
-        expectedPlayerCount: null,
         currentBlindLevel: 0,
         timerStartedAt: null,
         timerPausedAt: null,
@@ -382,7 +380,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       scheduledStartAt: times.scheduledStartAt,
       lateRegClosesAt: times.lateRegClosesAt,
       estimatedEndAt: times.estimatedEndAt,
-      expectedPlayerCount: times.expectedPlayerCount,
     };
   });
 
@@ -645,7 +642,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     sessionStartMinutesOfDay: z.number().int().min(0).max(1439),
     sessionDurationMinutes: z.number().int().min(1),
-    expectedPlayerCount: z.number().int().min(1),
   });
   app.post("/api/admin/tournament-series", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
@@ -672,14 +668,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       isActive: series.isActive,
       sessionStartMinutesOfDay: series.sessionStartMinutesOfDay,
       sessionDurationMinutes: series.sessionDurationMinutes,
-      expectedPlayerCount: series.expectedPlayerCount,
     };
   });
 
   const TournamentSeriesParamsBody = z.object({
     sessionStartMinutesOfDay: z.number().int().min(0).max(1439),
     sessionDurationMinutes: z.number().int().min(1),
-    expectedPlayerCount: z.number().int().min(1),
   });
   app.put("/api/admin/tournament-series/:id/params", async (req, reply) => {
     const admin = await requireAdmin(req, reply);

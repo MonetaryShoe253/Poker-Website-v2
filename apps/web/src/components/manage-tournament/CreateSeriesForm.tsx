@@ -29,27 +29,20 @@ export function CreateSeriesForm({
   const [startTime, setStartTime] = useState("17:00");
   const [durationHours, setDurationHours] = useState("4");
   const [durationMinutes, setDurationMinutes] = useState("20");
-  const [expectedPlayerCount, setExpectedPlayerCount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const canSubmit =
-    name.trim().length > 0 && startDate && endDate && expectedPlayerCount.trim().length > 0;
+  const canSubmit = name.trim().length > 0 && startDate && endDate;
 
   const submit = () => {
     const sessionStartMinutesOfDay = timeToMinutesOfDay(startTime);
     const sessionDurationMinutes = Number(durationHours) * 60 + Number(durationMinutes);
-    const expected = Number(expectedPlayerCount);
     if (sessionStartMinutesOfDay === null) {
       setError("Enter a valid start time.");
       return;
     }
     if (!Number.isInteger(sessionDurationMinutes) || sessionDurationMinutes < 1) {
       setError("Enter a valid duration.");
-      return;
-    }
-    if (!Number.isInteger(expected) || expected < 1) {
-      setError("Enter a valid expected player count.");
       return;
     }
     setBusy(true);
@@ -62,7 +55,6 @@ export function CreateSeriesForm({
         endDate,
         sessionStartMinutesOfDay,
         sessionDurationMinutes,
-        expectedPlayerCount: expected,
       }),
     })
       .then((res) => onCreated(res.id))
@@ -100,18 +92,10 @@ export function CreateSeriesForm({
           Duration (minutes)
           <input value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} className={`${inputCls} mt-1 w-full`} />
         </label>
-        <label className="text-xs text-muted">
-          Expected players
-          <input
-            value={expectedPlayerCount}
-            onChange={(e) => setExpectedPlayerCount(e.target.value)}
-            className={`${inputCls} mt-1 w-full`}
-          />
-        </label>
       </div>
       <p className="mt-2 text-xs text-muted">
-        Generates every Tuesday between the two dates, each with this same start time, duration,
-        and expected player count.
+        Generates every Tuesday between the two dates, each with this same start time and
+        duration, and the fixed blind schedule.
       </p>
       {error && <p className="mt-2 text-sm text-ember">{error}</p>}
       <button className={`${btnPrimary} mt-3`} disabled={!canSubmit || busy} onClick={submit}>

@@ -1,5 +1,9 @@
-import type { Series, Session } from "@prisma/client";
-import { SUBMISSION_WINDOW, TOURNAMENT_LATE_REG_WINDOW_MINUTES } from "@uos-poker/shared";
+import type { Prisma, Series, Session } from "@prisma/client";
+import {
+  FIXED_TOURNAMENT_BLIND_SCHEDULE,
+  SUBMISSION_WINDOW,
+  TOURNAMENT_LATE_REG_WINDOW_MINUTES,
+} from "@uos-poker/shared";
 import { prisma } from "../db";
 import { addLondonDays, londonDateAndMinutesToUtc, londonParts, londonToUtc } from "../time";
 import { generateSessionCode } from "./seasons";
@@ -18,7 +22,6 @@ export interface CreateTournamentSeriesInput {
   endDate: string; // "YYYY-MM-DD", London calendar date, inclusive
   sessionStartMinutesOfDay: number;
   sessionDurationMinutes: number;
-  expectedPlayerCount: number;
 }
 
 function parseDateOnly(value: string): { year: number; month: number; day: number } {
@@ -43,7 +46,6 @@ export async function createTournamentSeries(
       status: "ACTIVE",
       sessionStartMinutesOfDay: input.sessionStartMinutesOfDay,
       sessionDurationMinutes: input.sessionDurationMinutes,
-      expectedPlayerCount: input.expectedPlayerCount,
     },
   });
 
@@ -55,6 +57,7 @@ export async function createTournamentSeries(
     code: string;
     submissionsOpenAt: Date;
     submissionsCloseAt: Date;
+    blindSchedule: Prisma.InputJsonValue;
   }> = [];
   for (let day = startsAt; day <= endsAt; day = addLondonDays(day, 1)) {
     const parts = londonParts(day);
@@ -74,6 +77,7 @@ export async function createTournamentSeries(
         SUBMISSION_WINDOW.closeMinute,
         59,
       ),
+      blindSchedule: FIXED_TOURNAMENT_BLIND_SCHEDULE as unknown as Prisma.InputJsonValue,
     });
   }
   if (rows.length > 0) {
@@ -87,18 +91,17 @@ export interface SessionTimes {
   scheduledStartAt: Date | null;
   lateRegClosesAt: Date | null;
   estimatedEndAt: Date | null;
-  expectedPlayerCount: number | null;
 }
 
 /**
- * Effective start/duration/expected-count for a session: the session's own
- * snapshot if it's been opened, else derived live from the parent series'
- * current template — so editing a series' parameters instantly reflects on
- * every not-yet-opened session with no cascade/bulk-update needed.
+ * Effective start/duration for a session: the session's own snapshot if
+ * it's been opened, else derived live from the parent series' current
+ * template — so editing a series' parameters instantly reflects on every
+ * not-yet-opened session with no cascade/bulk-update needed.
  */
 export function computeSessionTimes(
-  session: Pick<Session, "date" | "scheduledStartTime" | "estimatedDuration" | "expectedPlayerCount">,
-  series: Pick<Series, "sessionStartMinutesOfDay" | "sessionDurationMinutes" | "expectedPlayerCount">,
+  session: Pick<Session, "date" | "scheduledStartTime" | "estimatedDuration">,
+  series: Pick<Series, "sessionStartMinutesOfDay" | "sessionDurationMinutes">,
 ): SessionTimes {
   const snapshotted = session.scheduledStartTime !== null;
   const scheduledStartAt = snapshotted
@@ -107,7 +110,6 @@ export function computeSessionTimes(
       ? londonDateAndMinutesToUtc(session.date, series.sessionStartMinutesOfDay)
       : null;
   const durationMinutes = snapshotted ? session.estimatedDuration : series.sessionDurationMinutes;
-  const expectedPlayerCount = snapshotted ? session.expectedPlayerCount : series.expectedPlayerCount;
 
   const lateRegClosesAt = scheduledStartAt
     ? new Date(scheduledStartAt.getTime() + TOURNAMENT_LATE_REG_WINDOW_MINUTES * 60_000)
@@ -117,5 +119,5 @@ export function computeSessionTimes(
       ? new Date(scheduledStartAt.getTime() + durationMinutes * 60_000)
       : null;
 
-  return { scheduledStartAt, lateRegClosesAt, estimatedEndAt, expectedPlayerCount };
+  return { scheduledStartAt, lateRegClosesAt, estimatedEndAt };
 }

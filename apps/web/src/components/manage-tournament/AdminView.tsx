@@ -19,7 +19,6 @@ interface SessionDetail {
   id: string;
   status: SessionStatus;
   activePlayerCount: number | null;
-  expectedPlayerCount: number | null;
   blindSchedule: BlindLevel[] | null;
   currentBlindLevel: number;
   timerStartedAt: string | null;
@@ -181,26 +180,18 @@ export function AdminView({
       </div>
 
       <div className="panel-steel rounded-lg p-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="font-display text-xs uppercase tracking-widest text-muted">
-              Active players (live)
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                value={activeCountInput}
-                onChange={(e) => setActiveCountInput(e.target.value)}
-                className={`${inputCls} w-24`}
-              />
-              <button className={btn} onClick={saveActiveCount}>
-                Save
-              </button>
-            </div>
-          </div>
-          <div>
-            <div className="font-display text-xs uppercase tracking-widest text-muted">Expected players</div>
-            <div className="tnum mt-2 text-lg">{detail.expectedPlayerCount ?? "—"}</div>
-          </div>
+        <div className="font-display text-xs uppercase tracking-widest text-muted">
+          Active players (live)
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            value={activeCountInput}
+            onChange={(e) => setActiveCountInput(e.target.value)}
+            className={`${inputCls} w-24`}
+          />
+          <button className={btn} onClick={saveActiveCount}>
+            Save
+          </button>
         </div>
       </div>
 
@@ -273,13 +264,13 @@ export function AdminView({
                   value={l.smallBlind}
                   onChange={(e) => updateLevel(i, { smallBlind: Number(e.target.value) })}
                   placeholder="SB"
-                  className={`${inputCls} w-16`}
+                  className={`${inputCls} w-20`}
                 />
                 <input
                   value={l.bigBlind}
                   onChange={(e) => updateLevel(i, { bigBlind: Number(e.target.value) })}
                   placeholder="BB"
-                  className={`${inputCls} w-16`}
+                  className={`${inputCls} w-20`}
                 />
                 <input
                   value={l.ante ?? ""}
