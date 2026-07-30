@@ -49,6 +49,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
+    minPasswordLength: 10,
     sendResetPassword: async ({ user, url }) => {
       await sendEmail({
         to: user.email,
@@ -89,6 +90,19 @@ export const auth = betterAuth({
           if (env.ADMIN_EMAIL && user.email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase()) {
             await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
           }
+          // Every account gets a linked Player — the tournament/kiosk identity.
+          // Registering online ahead of a session is what makes them
+          // findable at the kiosk without a separate in-person signup.
+          // If a guest Player already claimed this email at a kiosk, link it.
+          await prisma.player.upsert({
+            where: { email: user.email },
+            update: { userId: user.id },
+            create: {
+              email: user.email,
+              displayName: user.name?.trim() || user.email.split("@")[0] || user.email,
+              userId: user.id,
+            },
+          });
           // OAuth signups arrive pre-verified → welcome them now.
           if (user.emailVerified) {
             await sendWelcomeOnce(user);

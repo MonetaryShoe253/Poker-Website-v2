@@ -10,6 +10,23 @@ allowBuilds:
   esbuild: true
   prisma: true
 
+minimumReleaseAgeExclude:
+  - fastify@5.11.0
+  - brace-expansion@5.0.9
+
+# Security-patch pins for transitive deps our direct dependencies haven't
+# caught up to yet (see pnpm audit --prod). Scoped where a package is
+# needed at two incompatible majors (fast-uri) so we don't force a
+# breaking major bump onto a consumer that pinned an older range.
+overrides:
+  ws: ^8.21.1
+  find-my-way: ^9.7.0
+  brace-expansion: ^5.0.9
+  ajv>fast-uri: ^3.1.4
+  "@fastify/ajv-compiler>fast-uri": ^3.1.4
+  "fast-json-stringify@6.4.0>fast-uri": ^3.1.4
+  postcss: ^8.5.25
+
 onlyBuiltDependencies:
   - "@embedded-postgres/windows-x64"
   - "@embedded-postgres/linux-x64"

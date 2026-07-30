@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import cookie from "@fastify/cookie";
@@ -14,6 +14,10 @@ import { registerAdminRoutes } from "./routes-admin";
 export async function buildServer() {
   const isTest = env.NODE_ENV === "test" || process.env.VITEST !== undefined;
   const app = Fastify({
+    // Railway terminates TLS at its own edge proxy and forwards internally,
+    // so req.ip must come from X-Forwarded-For or every client collapses
+    // onto the proxy's address (breaks per-IP rate limiting).
+    trustProxy: true,
     logger: isTest
       ? { level: "warn" }
       : {
@@ -53,9 +57,22 @@ export async function buildServer() {
   });
   await app.register(cookie);
   await app.register(rateLimit, {
-    global: false,
+    global: true,
     max: 200,
     timeWindow: "1 minute",
+  });
+
+  // Fastify's default error handler forwards error.message verbatim to the
+  // client, which leaks raw Prisma/internal error text for any unthrown
+  // exception (several handlers `throw` on unexpected DB errors). Log full
+  // detail server-side always; collapse 5xx to a generic message in prod.
+  app.setErrorHandler<FastifyError>((error, req, reply) => {
+    req.log.error({ err: error, url: req.url }, "request error");
+    const statusCode = error.statusCode ?? 500;
+    if (isProd && statusCode >= 500) {
+      return reply.code(500).send({ error: "Something went wrong. Please try again." });
+    }
+    return reply.code(statusCode).send({ error: error.message });
   });
 
   app.get("/healthz", async () => ({ ok: true, uptime: process.uptime() }));

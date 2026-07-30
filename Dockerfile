@@ -21,6 +21,12 @@ RUN pnpm --filter @uos-poker/web build
 
 ENV NODE_ENV=production
 EXPOSE 3001
+
+# Run as the image's built-in unprivileged user rather than root. Build
+# steps above stay root; only the running process drops privilege.
+RUN chown -R node:node /app
+USER node
+
 # Runs `prisma migrate deploy` then boots the server (tsx at runtime —
 # the workspace packages export TS source directly; see CLAUDE.md/NOTES.md).
 CMD ["pnpm", "--filter", "@uos-poker/server", "start:prod"]
