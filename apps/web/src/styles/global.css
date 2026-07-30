@@ -39,6 +39,16 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+/* Scrolls (e.g. the nav bar at widths where it doesn't fit) without a
+   visible scrollbar sitting on top of the content next to it. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Machined-metal panel: subtle vertical gradient + 1px top-edge highlight. */
 .panel-steel {
   background: linear-gradient(180deg, var(--color-bg-2), var(--color-bg-1));

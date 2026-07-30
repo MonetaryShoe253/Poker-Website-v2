@@ -78,7 +78,7 @@ export function Layout() {
           <Link to="/" aria-label="UOS Poker home" className="shrink-0">
             <Wordmark />
           </Link>
-          <ul className="-mx-1 flex w-full items-center gap-0.5 overflow-x-auto text-sm sm:mx-0 sm:w-auto sm:gap-1">
+          <ul className="no-scrollbar -mx-1 flex w-full items-center gap-0.5 overflow-x-auto text-sm sm:mx-0 sm:w-auto sm:gap-1">
             {items.map((item) => (
               <li key={item.to} className="shrink-0">
                 <NavLink

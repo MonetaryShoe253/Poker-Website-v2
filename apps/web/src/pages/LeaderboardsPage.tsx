@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "tournament" | "cash" | "elo";
 
@@ -6,6 +6,7 @@ interface SeasonInfo {
   id: string;
   name: string;
   isActive: boolean;
+  createdAt: string;
 }
 
 interface TournamentRow {
@@ -13,8 +14,10 @@ interface TournamentRow {
   nickname: string;
   points: number;
   bestFinish: number | null;
-  sessions: number;
-  movement: number;
+  avgFinish: number | null;
+  finalTables: number;
+  weeksPlayed: number;
+  currentStreak: number | null;
 }
 interface CashRow {
   rank: number;
@@ -47,42 +50,114 @@ function RankBadge({ rank }: { rank: number }) {
   return <span className="text-muted">{rank}</span>;
 }
 
+type TournamentSortKey = "points" | "avgFinish" | "bestFinish";
+
 export function LeaderboardsPage() {
   const [tab, setTab] = useState<Tab>("tournament");
   const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
-  const [seasonId, setSeasonId] = useState<string>("");
+  // Defaults to the most recently created series once /api/seasons loads
+  // (see the effect below) — series aren't reliably flagged "active" (new
+  // tournament series never are), so that's a better default than "all".
+  const [seasonId, setSeasonId] = useState<string>("all");
   const [tournament, setTournament] = useState<TournamentRow[]>([]);
   const [cash, setCash] = useState<CashRow[]>([]);
   const [elo, setElo] = useState<EloBoard | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [seriesSessions, setSeriesSessions] = useState<Array<{ id: string; ordinal: number; date: string }>>([]);
+  const [fromOrdinal, setFromOrdinal] = useState<number | "">("");
+  const [toOrdinal, setToOrdinal] = useState<number | "">("");
+  const [sortKey, setSortKey] = useState<TournamentSortKey>("points");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (key: TournamentSortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "points" ? "desc" : "asc");
+    }
+  };
+
+  const sortIndicator = (key: TournamentSortKey) => (sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "");
+
+  const displayedTournament = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const filtered = needle ? tournament.filter((r) => r.nickname.toLowerCase().includes(needle)) : tournament;
+    const sorted = [...filtered].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      return sortDir === "asc" ? av - bv : bv - av;
+    });
+    return sorted.map((r, i) => ({ ...r, rank: i + 1 }));
+  }, [tournament, search, sortKey, sortDir]);
 
   useEffect(() => {
     void fetch("/api/seasons")
       .then((r) => r.json())
       .then((list: SeasonInfo[]) => {
         setSeasons(list);
-        const active = list.find((s) => s.isActive);
-        if (active) setSeasonId(active.id);
+        const newest = [...list].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0];
+        if (newest) setSeasonId(newest.id);
       });
   }, []);
 
+  // A "from session / to session" range only has one well-defined meaning
+  // within a single series, so it's only offered once one is selected.
   useEffect(() => {
+    setFromOrdinal("");
+    setToOrdinal("");
+    if (!seasonId || seasonId === "all") {
+      setSeriesSessions([]);
+      return;
+    }
+    void fetch(`/api/seasons/${seasonId}/tournament-sessions`)
+      .then((r) => r.json())
+      .then(setSeriesSessions);
+  }, [seasonId]);
+
+  const fromDate = fromOrdinal ? (seriesSessions[fromOrdinal - 1]?.date ?? "") : "";
+  const toDate = toOrdinal ? (seriesSessions[toOrdinal - 1]?.date ?? "") : "";
+
+  // Guards against a slower, now-stale request (e.g. the initial "all-time"
+  // fetch that fires before the default-series effect resolves) clobbering
+  // a newer response that already landed — only the latest request's result
+  // is ever applied, no matter what order the responses arrive in.
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    const requestId = ++requestIdRef.current;
     if (tab === "elo") {
       void fetch("/api/leaderboards/elo")
         .then((r) => r.json())
-        .then(setElo);
+        .then((data) => {
+          if (requestId === requestIdRef.current) setElo(data);
+        });
       return;
     }
-    const q = seasonId ? `?seasonId=${seasonId}` : "";
+    const params = new URLSearchParams();
+    if (seasonId) params.set("seasonId", seasonId);
     if (tab === "tournament") {
-      void fetch(`/api/leaderboards/tournament${q}`)
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+      void fetch(`/api/leaderboards/tournament?${params}`)
         .then((r) => r.json())
-        .then(setTournament);
+        .then((data) => {
+          if (requestId === requestIdRef.current) setTournament(data);
+        });
     } else {
-      void fetch(`/api/leaderboards/cash${q}`)
+      void fetch(`/api/leaderboards/cash?${params}`)
         .then((r) => r.json())
-        .then(setCash);
+        .then((data) => {
+          if (requestId === requestIdRef.current) setCash(data);
+        });
     }
-  }, [tab, seasonId]);
+  }, [tab, seasonId, fromDate, toDate]);
 
   const tabButton = (key: Tab, label: string) => (
     <button
@@ -120,6 +195,62 @@ export function LeaderboardsPage() {
         )}
       </div>
 
+      {tab === "tournament" && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search player…"
+            className="rounded border border-steel bg-bg-0 px-2 py-1.5 text-sm"
+          />
+          {seriesSessions.length > 0 && (
+            <>
+              <label className="flex items-center gap-1 text-xs text-muted">
+                From session
+                <select
+                  value={fromOrdinal}
+                  onChange={(e) => setFromOrdinal(e.target.value ? Number(e.target.value) : "")}
+                  className="rounded border border-steel bg-bg-0 px-2 py-1.5 text-sm text-text"
+                >
+                  <option value="">1st</option>
+                  {seriesSessions.map((s) => (
+                    <option key={s.id} value={s.ordinal}>
+                      {s.ordinal}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1 text-xs text-muted">
+                Through session
+                <select
+                  value={toOrdinal}
+                  onChange={(e) => setToOrdinal(e.target.value ? Number(e.target.value) : "")}
+                  className="rounded border border-steel bg-bg-0 px-2 py-1.5 text-sm text-text"
+                >
+                  <option value="">Last</option>
+                  {seriesSessions.map((s) => (
+                    <option key={s.id} value={s.ordinal}>
+                      {s.ordinal}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {(fromOrdinal || toOrdinal) && (
+                <button
+                  onClick={() => {
+                    setFromOrdinal("");
+                    setToOrdinal("");
+                  }}
+                  className="text-xs text-muted underline hover:text-text"
+                >
+                  Clear range
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       <div className="panel-steel mt-4 overflow-x-auto rounded-lg">
         {tab === "tournament" && (
           <table className="w-full text-sm">
@@ -127,14 +258,28 @@ export function LeaderboardsPage() {
               <tr className="border-b border-line text-left text-xs uppercase tracking-widest text-muted">
                 <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Player</th>
-                <th className="tnum px-4 py-3 text-right">Points</th>
-                <th className="tnum px-4 py-3 text-right">Best finish</th>
-                <th className="tnum px-4 py-3 text-right">Played</th>
-                <th className="px-4 py-3 text-right">Week</th>
+                <th className="tnum px-4 py-3 text-right">
+                  <button onClick={() => toggleSort("points")} className="hover:text-text">
+                    Points{sortIndicator("points")}
+                  </button>
+                </th>
+                <th className="tnum px-4 py-3 text-right">Streak</th>
+                <th className="tnum px-4 py-3 text-right">
+                  <button onClick={() => toggleSort("bestFinish")} className="hover:text-text">
+                    Best finish{sortIndicator("bestFinish")}
+                  </button>
+                </th>
+                <th className="tnum px-4 py-3 text-right">
+                  <button onClick={() => toggleSort("avgFinish")} className="hover:text-text">
+                    Avg finish{sortIndicator("avgFinish")}
+                  </button>
+                </th>
+                <th className="tnum px-4 py-3 text-right">Weeks played</th>
+                <th className="tnum px-4 py-3 text-right">Final tables</th>
               </tr>
             </thead>
             <tbody>
-              {tournament.map((row) => (
+              {displayedTournament.map((row) => (
                 <tr key={row.rank} className="border-b border-line/50">
                   <td className="px-4 py-2.5">
                     <RankBadge rank={row.rank} />
@@ -143,16 +288,16 @@ export function LeaderboardsPage() {
                     {row.nickname}
                   </td>
                   <td className="tnum px-4 py-2.5 text-right">{row.points}</td>
+                  <td className="tnum px-4 py-2.5 text-right">{row.currentStreak ?? "—"}</td>
                   <td className="tnum px-4 py-2.5 text-right">{row.bestFinish ?? "—"}</td>
-                  <td className="tnum px-4 py-2.5 text-right">{row.sessions}</td>
-                  <td className="px-4 py-2.5 text-right">
-                    <Movement value={row.movement} />
-                  </td>
+                  <td className="tnum px-4 py-2.5 text-right">{row.avgFinish ?? "—"}</td>
+                  <td className="tnum px-4 py-2.5 text-right">{row.weeksPlayed}</td>
+                  <td className="tnum px-4 py-2.5 text-right">{row.finalTables}</td>
                 </tr>
               ))}
-              {tournament.length === 0 && (
+              {displayedTournament.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted">
+                  <td colSpan={8} className="px-4 py-8 text-center text-muted">
                     No results yet this season. Tuesday's your chance.
                   </td>
                 </tr>

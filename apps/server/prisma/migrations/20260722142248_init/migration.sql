@@ -151,8 +151,8 @@ CREATE TABLE "session" (
 CREATE TABLE "session_entry" (
     "id" TEXT NOT NULL,
     "sessionId" TEXT NOT NULL,
-    "playerId" TEXT,
-    "userId" TEXT NOT NULL,
+    "playerId" TEXT NOT NULL,
+    "userId" TEXT,
     "signInTime" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "signOutTime" TIMESTAMP(3),
     "position" INTEGER,
@@ -321,7 +321,10 @@ CREATE INDEX "session_entry_sessionId_idx" ON "session_entry"("sessionId");
 CREATE INDEX "session_entry_userId_idx" ON "session_entry"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "session_entry_sessionId_userId_key" ON "session_entry"("sessionId", "userId");
+CREATE INDEX "session_entry_playerId_idx" ON "session_entry"("playerId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "session_entry_sessionId_playerId_key" ON "session_entry"("sessionId", "playerId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Streak_playerId_seriesId_key" ON "Streak"("playerId", "seriesId");
@@ -366,10 +369,10 @@ ALTER TABLE "session" ADD CONSTRAINT "session_seriesId_fkey" FOREIGN KEY ("serie
 ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "session"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "player"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "player"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "session_entry" ADD CONSTRAINT "session_entry_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Streak" ADD CONSTRAINT "Streak_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "player"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -24,14 +24,6 @@ interface SessionDetail {
   timerStartedAt: string | null;
   timerPausedAt: string | null;
   isPaused: boolean;
-  closedAt: string | null;
-}
-
-const DNF_CORRECTION_WINDOW_HOURS = 48;
-
-function withinCorrectionWindow(closedAt: string | null): boolean {
-  if (!closedAt) return false;
-  return Date.now() - new Date(closedAt).getTime() <= DNF_CORRECTION_WINDOW_HOURS * 3_600_000;
 }
 
 export function AdminView({
@@ -50,6 +42,10 @@ export function AdminView({
   const [activeCountInput, setActiveCountInput] = useState("");
   const [levels, setLevels] = useState<BlindLevel[]>([]);
   const [showDelete, setShowDelete] = useState(false);
+  // SessionEntriesTable fetches its own data keyed on sessionId, which never
+  // changes when a lifecycle action (e.g. Close, which finalizes everyone's
+  // points) succeeds — bumping this forces it to refetch alongside us.
+  const [entriesVersion, setEntriesVersion] = useState(0);
 
   const load = useCallback(() => {
     void api<SessionDetail>(`/api/admin/sessions/${sessionId}`).then((d) => {
@@ -65,6 +61,7 @@ export function AdminView({
       .then(() => {
         setError(null);
         load();
+        setEntriesVersion((v) => v + 1);
         onChanged();
       })
       .catch((e: Error) => setError(e.message));
@@ -315,7 +312,8 @@ export function AdminView({
         <div className="mt-3">
           <SessionEntriesTable
             sessionId={sessionId}
-            editable={detail.status === "CLOSED" && withinCorrectionWindow(detail.closedAt)}
+            editable={detail.status !== "CREATED" && detail.status !== "SCHEDULED" && detail.status !== "ARCHIVED"}
+            refreshKey={entriesVersion}
           />
         </div>
       </div>

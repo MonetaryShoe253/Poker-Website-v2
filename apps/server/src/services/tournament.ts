@@ -1,10 +1,10 @@
+import { TOURNAMENT_FLOOR_POINTS } from "@uos-poker/shared";
 import { prisma } from "../db";
 
 export interface TournamentFormula {
   A: number;
   B: number;
   ITM_PERCENT: number;
-  STREAK_BASE: number;
 }
 
 /** floor(A * N * e^(-B*p)) for finishers inside the cutoff, 0 outside it. */
@@ -18,45 +18,32 @@ export function calculateTournamentPoints(
   return Math.floor(formula.A * entrantCount * Math.exp(-formula.B * position));
 }
 
-export function deriveStreaks(
-  entries: Array<{ userId: string; signedOut: boolean; dnf: boolean; sessionDate: string }>,
-  baseBonus: number,
-): Array<{ userId: string; currentStreak: number; longestStreak: number; streakBonus: number }> {
-  const byUser = new Map<string, Array<{ signedOut: boolean; dnf: boolean; sessionDate: string }>>();
-  for (const entry of entries) {
-    const existing = byUser.get(entry.userId) ?? [];
-    existing.push({ signedOut: entry.signedOut, dnf: entry.dnf, sessionDate: entry.sessionDate });
-    byUser.set(entry.userId, existing);
-  }
+/** Tops a non-DNF finish up to the guaranteed floor — never applies to a DNF. */
+export function applyFloor(rawPoints: number): number {
+  return Math.max(rawPoints, TOURNAMENT_FLOOR_POINTS);
+}
 
-  return [...byUser.entries()].map(([userId, sessions]) => {
-    let currentStreak = 0;
-    let longestStreak = 0;
-    for (const session of sessions) {
-      if (session.signedOut && !session.dnf) {
-        currentStreak += 1;
-        longestStreak = Math.max(longestStreak, currentStreak);
-      } else {
-        currentStreak = 0;
-      }
-    }
-    return {
-      userId,
-      currentStreak,
-      longestStreak,
-      streakBonus: longestStreak > 0 ? baseBonus * longestStreak : 0,
-    };
-  });
+/** 0 for a lone clean week; from the second week on, the bonus equals the
+ * streak length itself (2, 3, 4, ...) — capped naturally by a ~12-week
+ * semester, so it can never approach a real placement's points. */
+export function streakBonusForWeeks(weeks: number): number {
+  return weeks <= 1 ? 0 : weeks;
+}
+
+/** A DNF doesn't zero a streak outright once it's established — it costs 3
+ * weeks of progress instead, so one bad week doesn't erase a semester of
+ * consistency. Short streaks (<3) just break as normal. */
+export function applyStreakMiss(currentWeeks: number): number {
+  return currentWeeks >= 3 ? Math.max(0, currentWeeks - 3) : 0;
 }
 
 export async function getTournamentFormula(): Promise<TournamentFormula> {
-  const rows = await prisma.formulaConfig.findMany({ where: { key: { in: ["A", "B", "ITM_PERCENT", "STREAK_BASE"] } } });
+  const rows = await prisma.formulaConfig.findMany({ where: { key: { in: ["A", "B", "ITM_PERCENT"] } } });
   const map = new Map(rows.map((row) => [row.key, Number(row.value)]));
   return {
     A: map.get("A") ?? 2.5,
     B: map.get("B") ?? 0.22,
     ITM_PERCENT: map.get("ITM_PERCENT") ?? 0.2,
-    STREAK_BASE: map.get("STREAK_BASE") ?? 2,
   };
 }
 
@@ -64,7 +51,6 @@ const FORMULA_DEFAULTS = [
   { key: "A", value: "2.5" },
   { key: "B", value: "0.22" },
   { key: "ITM_PERCENT", value: "0.2" },
-  { key: "STREAK_BASE", value: "2" },
 ];
 
 /** Seeds default formula values for keys that don't exist yet. Never

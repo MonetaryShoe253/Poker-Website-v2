@@ -4,6 +4,7 @@ import { api, btn, inputCls } from "../../lib/adminShared";
 interface SeriesDetail {
   id: string;
   name: string;
+  status: "ACTIVE" | "ARCHIVED";
   sessionStartMinutesOfDay: number | null;
   sessionDurationMinutes: number | null;
 }
@@ -43,13 +44,41 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
   }, [seriesId]);
   useEffect(load, [load]);
 
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
   if (!detail) return null;
+
+  const toggleArchive = () => {
+    setArchiveBusy(true);
+    setArchiveError(null);
+    const action = detail.status === "ARCHIVED" ? "unarchive" : "archive";
+    void api(`/api/admin/tournament-series/${seriesId}/${action}`, { method: "POST" })
+      .then(load)
+      .catch((e: Error) => setArchiveError(e.message))
+      .finally(() => setArchiveBusy(false));
+  };
+
+  const archiveControl = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="font-display text-xs uppercase tracking-widest text-muted">
+        {detail.name} <span className="text-ember">·</span> {detail.status}
+      </div>
+      <button className={btn} disabled={archiveBusy} onClick={toggleArchive}>
+        {detail.status === "ARCHIVED" ? "Undo: unarchive series" : "Archive series"}
+      </button>
+    </div>
+  );
 
   if (detail.sessionStartMinutesOfDay === null) {
     return (
       <div className="panel-steel mt-4 rounded-lg p-4 text-sm text-muted">
-        Legacy season — no tournament template. Only series created via "New tournament series"
-        have editable start time / duration.
+        {archiveControl}
+        {archiveError && <p className="mt-2 text-sm text-ember">{archiveError}</p>}
+        <p className="mt-2">
+          Legacy season — no tournament template. Only series created via "New tournament series"
+          have editable start time / duration.
+        </p>
       </div>
     );
   }
@@ -79,10 +108,9 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
 
   return (
     <div className="panel-steel mt-4 rounded-lg p-4">
-      <div className="font-display text-xs uppercase tracking-widest text-muted">
-        {detail.name} — series template
-      </div>
-      <p className="mt-1 text-xs text-muted">
+      {archiveControl}
+      {archiveError && <p className="mt-2 text-sm text-ember">{archiveError}</p>}
+      <p className="mt-2 text-xs text-muted">
         Applies to every not-yet-opened session in this series immediately on save.
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">

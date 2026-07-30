@@ -3,7 +3,7 @@ import { api, tabButtonClass } from "../../lib/adminShared";
 import { formatOrdinal } from "../../lib/format";
 import { ArchivedSessionSummary } from "./ArchivedSessionSummary";
 import { AdminView } from "./AdminView";
-import { KioskViewPlaceholder } from "./KioskViewPlaceholder";
+import { KioskView } from "./KioskView";
 import { TournamentInfoView } from "./TournamentInfoView";
 
 type SessionStatus = "CREATED" | "SCHEDULED" | "OPEN" | "LATE_REG_CLOSED" | "CLOSED" | "ARCHIVED";
@@ -93,7 +93,7 @@ export function SessionDetailView({ sessionId, onBack }: { sessionId: string; on
                 ))}
               </nav>
               <div className="mt-5">
-                {tab === "kiosk" && <KioskViewPlaceholder />}
+                {tab === "kiosk" && <KioskView sessionId={sessionId} sessionStatus={detail.status} />}
                 {tab === "info" && <TournamentInfoView sessionId={sessionId} />}
                 {tab === "admin" && (
                   <AdminView

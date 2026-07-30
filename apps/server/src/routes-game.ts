@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { BANKROLL, DNF_POSITION_SENTINEL, ELO } from "@uos-poker/shared";
+import { BANKROLL, DNF_POSITION_SENTINEL, ELO, FINAL_TABLE_SIZE, TOURNAMENT_BEST_SESSIONS_COUNT } from "@uos-poker/shared";
 import { sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { isProd } from "./env";
@@ -49,7 +49,26 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       isActive: s.isActive,
       startsAt: s.startsAt,
       endsAt: s.endsAt,
+      createdAt: s.createdAt,
     }));
+  });
+
+  /** Tournament sessions in a series, ordinal-numbered — backs the
+   * leaderboard's "session N through M" range picker. Dates come back as
+   * plain London calendar-day strings (not raw UTC timestamps), since a
+   * session's stored instant can land on the previous UTC day under BST. */
+  app.get("/api/seasons/:id/tournament-sessions", async (req) => {
+    const { id } = req.params as { id: string };
+    const sessions = await prisma.session.findMany({
+      where: { seriesId: id, type: "TOURNAMENT" },
+      orderBy: { date: "asc" },
+      select: { id: true, date: true },
+    });
+    return sessions.map((s, i) => {
+      const p = londonParts(s.date);
+      const date = `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+      return { id: s.id, ordinal: i + 1, date };
+    });
   });
 
   app.get("/api/sessions/upcoming", async () => {
@@ -96,6 +115,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (profile.suspendedAt !== null) {
       return reply.code(403).send({ error: "Your account is suspended. Speak to the committee." });
     }
+    const player = await prisma.player.findUnique({ where: { userId: user.id } });
+    if (!player) return reply.code(500).send({ error: "Your player profile is missing. Contact an admin." });
 
     const parsed = (kind === "TOURNAMENT" ? TournamentSubmission : CashSubmission).safeParse(
       req.body,
@@ -148,7 +169,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       const submission = await prisma.sessionEntry.create({
-        data: { sessionId: session.id, userId: user.id, ...data },
+        data: { sessionId: session.id, userId: user.id, playerId: player.id, ...data },
       });
       return { ok: true, submission: { id: submission.id, ...data } };
     } catch (err) {
@@ -171,78 +192,126 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
   // --- Leaderboards ----------------------------------------------------------------
 
-  const seasonFilter = async (seasonId: string | undefined) => {
-    if (seasonId === "all") return {};
+  /** The resolved series id for a season filter, or null for "all-time"/no match. */
+  const resolveSeriesId = async (seasonId: string | undefined): Promise<string | null> => {
+    if (seasonId === "all") return null;
     const series = seasonId
       ? await prisma.series.findUnique({ where: { id: seasonId } })
       : await ensureActiveSeason();
-    return series ? { session: { seriesId: series.id } } : {};
+    return series?.id ?? null;
   };
 
-  app.get("/api/leaderboards/tournament", async (req) => {
-    const { seasonId } = req.query as { seasonId?: string };
+  const seasonFilter = async (seasonId: string | undefined) => {
+    const seriesId = await resolveSeriesId(seasonId);
+    return seriesId ? { session: { seriesId } } : {};
+  };
+
+  const parseDateOnly = (value: string): Date | null => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+    return londonToUtc(Number(match[1]), Number(match[2]), Number(match[3]));
+  };
+
+  const leaderboardRateLimit = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
+
+  app.get("/api/leaderboards/tournament", leaderboardRateLimit, async (req) => {
+    const { seasonId, from, to } = req.query as { seasonId?: string; from?: string; to?: string };
+    const fromDate = from ? parseDateOnly(from) : null;
+    const toDate = to ? parseDateOnly(to) : null;
+    const seriesId = await resolveSeriesId(seasonId);
     const where = {
       voidedAt: null,
       points: { not: null },
-      session: { type: "TOURNAMENT" as const },
-      ...(await seasonFilter(seasonId)),
+      session: {
+        type: "TOURNAMENT" as const,
+        ...(seriesId ? { seriesId } : {}),
+        ...(fromDate || toDate
+          ? { date: { ...(fromDate ? { gte: fromDate } : {}), ...(toDate ? { lte: toDate } : {}) } }
+          : {}),
+      },
     };
     const submissions = await prisma.sessionEntry.findMany({
       where,
-      include: { user: { include: { profile: true } } },
+      include: { player: true },
     });
 
-    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-    const byUser = new Map<
+    // Current streak only has one well-defined meaning within a single
+    // series — across "all-time" it's ambiguous, so it's left null there.
+    const streakByPlayer = seriesId
+      ? new Map(
+          (await prisma.streak.findMany({ where: { seriesId } })).map((s) => [s.playerId, s.currentStreak]),
+        )
+      : null;
+
+    // Entrants per session, for substituting a DNF's finishing position with
+    // the field's median when computing average finish (never for points).
+    const entrantsBySession = new Map<string, number>();
+    for (const sub of submissions) {
+      entrantsBySession.set(sub.sessionId, (entrantsBySession.get(sub.sessionId) ?? 0) + 1);
+    }
+
+    const byPlayer = new Map<
       string,
       {
         nickname: string;
-        avatarId: string;
-        points: number;
-        pointsLastWeek: number;
+        sessionPoints: number[];
         bestFinish: number;
-        sessions: number;
+        finishSum: number;
+        finishCount: number;
+        finalTables: number;
       }
     >();
     for (const sub of submissions) {
-      const nickname = sub.user.profile?.nickname ?? "—";
-      const entry = byUser.get(sub.userId) ?? {
-        nickname,
-        avatarId: sub.user.profile?.avatarId ?? "spade-ember",
-        points: 0,
-        pointsLastWeek: 0,
+      const entry = byPlayer.get(sub.playerId) ?? {
+        nickname: sub.player.displayName,
+        sessionPoints: [],
         bestFinish: Number.MAX_SAFE_INTEGER,
-        sessions: 0,
+        finishSum: 0,
+        finishCount: 0,
+        finalTables: 0,
       };
-      entry.points += sub.points ?? 0;
-      if (sub.createdAt < weekAgo) entry.pointsLastWeek += sub.points ?? 0;
-      entry.bestFinish = Math.min(entry.bestFinish, sub.finishingPosition ?? 999);
-      entry.sessions += 1;
-      byUser.set(sub.userId, entry);
+      entry.sessionPoints.push(sub.points ?? 0);
+      const isDnf = sub.finishingPosition === DNF_POSITION_SENTINEL;
+      if (isDnf) {
+        const entrants = entrantsBySession.get(sub.sessionId) ?? 1;
+        entry.finishSum += (entrants + 1) / 2;
+        entry.finishCount += 1;
+      } else if (sub.finishingPosition != null) {
+        entry.bestFinish = Math.min(entry.bestFinish, sub.finishingPosition);
+        entry.finishSum += sub.finishingPosition;
+        entry.finishCount += 1;
+        if (sub.finishingPosition <= FINAL_TABLE_SIZE) entry.finalTables += 1;
+      }
+      byPlayer.set(sub.playerId, entry);
     }
 
-    const rank = (list: Array<[string, (typeof byUser extends Map<string, infer V> ? V : never)]>, key: "points" | "pointsLastWeek") =>
-      [...list].sort(
-        (a, b) => b[1][key] - a[1][key] || a[1].bestFinish - b[1].bestFinish,
-      );
+    // Only the best N sessions count toward the points total — everything
+    // else (best/avg finish, final tables) still reflects every entry in scope.
+    const scored = [...byPlayer.entries()].map(([playerId, e]) => {
+      const points = [...e.sessionPoints]
+        .sort((a, b) => b - a)
+        .slice(0, TOURNAMENT_BEST_SESSIONS_COUNT)
+        .reduce((sum, p) => sum + p, 0);
+      return [playerId, { ...e, points }] as const;
+    });
 
-    const entries = [...byUser.entries()];
-    const nowRanked = rank(entries, "points");
-    const thenRanked = rank(entries, "pointsLastWeek");
-    const thenIndex = new Map(thenRanked.map(([id], i) => [id, i]));
+    const ranked = scored.sort(
+      (a, b) => b[1].points - a[1].points || a[1].bestFinish - b[1].bestFinish,
+    );
 
-    return nowRanked.map(([userId, e], i) => ({
+    return ranked.map(([playerId, e], i) => ({
       rank: i + 1,
       nickname: e.nickname,
-      avatarId: e.avatarId,
       points: e.points,
       bestFinish: e.bestFinish === Number.MAX_SAFE_INTEGER ? null : e.bestFinish,
-      sessions: e.sessions,
-      movement: (thenIndex.get(userId) ?? i) - i,
+      avgFinish: e.finishCount > 0 ? Math.round((e.finishSum / e.finishCount) * 10) / 10 : null,
+      finalTables: e.finalTables,
+      weeksPlayed: e.finishCount,
+      currentStreak: streakByPlayer?.get(playerId) ?? (streakByPlayer ? 0 : null),
     }));
   });
 
-  app.get("/api/leaderboards/cash", async (req) => {
+  app.get("/api/leaderboards/cash", leaderboardRateLimit, async (req) => {
     const { seasonId } = req.query as { seasonId?: string };
     const where = {
       voidedAt: null,
@@ -252,11 +321,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     };
     const submissions = await prisma.sessionEntry.findMany({
       where,
-      include: { user: { include: { profile: true } } },
+      include: { player: true, user: { include: { profile: true } } },
     });
 
     const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-    const byUser = new Map<
+    const byPlayer = new Map<
       string,
       {
         nickname: string;
@@ -268,9 +337,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       }
     >();
     for (const sub of submissions) {
-      const entry = byUser.get(sub.userId) ?? {
-        nickname: sub.user.profile?.nickname ?? "—",
-        avatarId: sub.user.profile?.avatarId ?? "spade-ember",
+      const entry = byPlayer.get(sub.playerId) ?? {
+        nickname: sub.player.displayName,
+        avatarId: sub.user?.profile?.avatarId ?? "spade-ember",
         net: 0,
         netLastWeek: 0,
         sessions: 0,
@@ -280,10 +349,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       if (sub.createdAt < weekAgo) entry.netLastWeek += sub.netChips ?? 0;
       entry.sessions += 1;
       entry.biggestNight = Math.max(entry.biggestNight, sub.netChips ?? 0);
-      byUser.set(sub.userId, entry);
+      byPlayer.set(sub.playerId, entry);
     }
 
-    const entries = [...byUser.entries()];
+    const entries = [...byPlayer.entries()];
     const sortNow = [...entries].sort(
       (a, b) =>
         b[1].net - a[1].net || b[1].sessions - a[1].sessions || b[1].biggestNight - a[1].biggestNight,
@@ -291,18 +360,18 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     const sortThen = [...entries].sort((a, b) => b[1].netLastWeek - a[1].netLastWeek);
     const thenIndex = new Map(sortThen.map(([id], i) => [id, i]));
 
-    return sortNow.map(([userId, e], i) => ({
+    return sortNow.map(([playerId, e], i) => ({
       rank: i + 1,
       nickname: e.nickname,
       avatarId: e.avatarId,
       net: e.net,
       sessions: e.sessions,
       biggestNight: e.biggestNight === Number.MIN_SAFE_INTEGER ? null : e.biggestNight,
-      movement: (thenIndex.get(userId) ?? i) - i,
+      movement: (thenIndex.get(playerId) ?? i) - i,
     }));
   });
 
-  app.get("/api/leaderboards/elo", async () => {
+  app.get("/api/leaderboards/elo", leaderboardRateLimit, async () => {
     const profiles = await prisma.profile.findMany({
       where: { ratedHands: { gte: ELO.minHandsForBoard }, nickname: { not: null } },
       orderBy: { elo: "desc" },
@@ -343,73 +412,16 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.post("/api/sessions/:id/signin", async (req, reply) => {
-    const user = await verifiedUser(req);
-    if (!user) return reply.code(401).send({ error: "Sign in first." });
-    const { id } = req.params as { id: string };
-    const body = z.object({ nickname: z.string().min(1).max(32) }).safeParse(req.body);
-    if (!body.success) return reply.code(400).send({ error: "Bad sign-in request." });
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session || session.status !== "OPEN") return reply.code(404).send({ error: "Session not open." });
-    const profile = await prisma.profile.findUnique({ where: { userId: user.id } });
-    if (!profile?.nickname) return reply.code(403).send({ error: "Pick your nickname first." });
-    await prisma.sessionEntry.upsert({
-      where: { sessionId_userId: { sessionId: id, userId: user.id } },
-      update: { signInTime: new Date(), voidedAt: null },
-      create: { sessionId: id, userId: user.id, signInTime: new Date() },
-    });
-    return { ok: true };
-  });
-
-  app.post("/api/sessions/:id/signout", async (req, reply) => {
-    const user = await verifiedUser(req);
-    if (!user) return reply.code(401).send({ error: "Sign in first." });
-    const { id } = req.params as { id: string };
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session || session.status === "CREATED" || session.status === "ARCHIVED") return reply.code(404).send({ error: "Session not active." });
-    const submission = await prisma.sessionEntry.findUnique({ where: { sessionId_userId: { sessionId: id, userId: user.id } } });
-    if (!submission) return reply.code(404).send({ error: "You are not signed in." });
-    const formula = await getTournamentFormula();
-    const approxPoints = calculateTournamentPoints(1, Math.max(1, submission.entrantCount ?? 1), formula);
-    await prisma.sessionEntry.update({ where: { sessionId_userId: { sessionId: id, userId: user.id } }, data: { signOutTime: new Date() } });
-    const entries = await prisma.sessionEntry.findMany({ where: { sessionId: id } });
-    const streakBase = formula.STREAK_BASE;
-    const byUser = new Map<string, Array<{ signedOut: boolean; dnf: boolean }>>();
-    for (const entry of entries) {
-      const existing = byUser.get(entry.userId) ?? [];
-      existing.push({ signedOut: Boolean(entry.signOutTime), dnf: entry.finishingPosition === DNF_POSITION_SENTINEL });
-      byUser.set(entry.userId, existing);
-    }
-    for (const [userId, sessions] of byUser) {
-      let current = 0;
-      let longest = 0;
-      for (const session of sessions) {
-        if (session.signedOut && !session.dnf) {
-          current += 1;
-          longest = Math.max(longest, current);
-        } else {
-          current = 0;
-        }
-      }
-      await prisma.streak.upsert({
-        where: { playerId_seriesId: { playerId: userId, seriesId: session.seriesId } },
-        update: { currentStreak: current, longestStreak: longest, streakBonus: longest > 0 ? streakBase * longest : 0 },
-        create: { playerId: userId, seriesId: session.seriesId, currentStreak: current, longestStreak: longest, streakBonus: longest > 0 ? streakBase * longest : 0 },
-      });
-    }
-    return { ok: true, approxPoints };
-  });
-
   app.get("/api/sessions/:id/entries", async (req) => {
     const { id } = req.params as { id: string };
     const entries = await prisma.sessionEntry.findMany({
       where: { sessionId: id },
-      include: { user: { include: { profile: true } } },
-      orderBy: { signInTime: "asc" },
+      include: { player: true },
+      orderBy: [{ finishingPosition: { sort: "asc", nulls: "last" } }, { player: { displayName: "asc" } }],
     });
     return entries.map((entry) => ({
       id: entry.id,
-      nickname: entry.user.profile?.nickname ?? entry.user.email,
+      nickname: entry.player.displayName,
       signedIn: Boolean(entry.signInTime),
       signedOut: Boolean(entry.signOutTime),
       finishingPosition: entry.finishingPosition,

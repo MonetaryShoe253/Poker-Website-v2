@@ -112,6 +112,15 @@ export const SUBMISSION_WINDOW = { openHour: 17, closeHour: 23, closeMinute: 59 
 /** Fixed late-registration window for tournament series — not per-series yet. */
 export const TOURNAMENT_LATE_REG_WINDOW_MINUTES = 70;
 
+/** A finishing position at or better than this counts as "reaching the final table". */
+export const FINAL_TABLE_SIZE = 9;
+
+/** Guaranteed minimum points for any non-DNF tournament finish, even outside the ITM cutoff. */
+export const TOURNAMENT_FLOOR_POINTS = 2;
+
+/** Only a player's best N sessions count toward their leaderboard points total. */
+export const TOURNAMENT_BEST_SESSIONS_COUNT = 8;
+
 export interface TournamentBlindLevel {
   level: number;
   smallBlind: number;

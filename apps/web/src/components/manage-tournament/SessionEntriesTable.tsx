@@ -3,7 +3,7 @@ import { api, btn, inputCls } from "../../lib/adminShared";
 
 interface EntryRow {
   id: string;
-  userId: string;
+  playerId: string;
   nickname: string;
   email: string;
   signInTime: string;
@@ -21,23 +21,29 @@ interface EntryRow {
 const timeFmt = (iso: string | null) =>
   iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—";
 
-export function SessionEntriesTable({ sessionId, editable }: { sessionId: string; editable: boolean }) {
+export function SessionEntriesTable({
+  sessionId,
+  editable,
+  refreshKey,
+}: {
+  sessionId: string;
+  editable: boolean;
+  refreshKey?: number;
+}) {
   const [rows, setRows] = useState<EntryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [posInput, setPosInput] = useState("");
-  const [entrantInput, setEntrantInput] = useState("");
 
   const load = useCallback(
     () => void api<EntryRow[]>(`/api/admin/sessions/${sessionId}/entries`).then(setRows),
     [sessionId],
   );
-  useEffect(load, [load]);
+  useEffect(load, [load, refreshKey]);
 
   const startEdit = (row: EntryRow) => {
     setEditingId(row.id);
     setPosInput(row.finishingPosition && !row.isDNF ? String(row.finishingPosition) : "");
-    setEntrantInput(row.entrantCount ? String(row.entrantCount) : "");
   };
 
   const savePoints = (id: string) => {
@@ -46,10 +52,9 @@ export function SessionEntriesTable({ sessionId, editable }: { sessionId: string
       setError("Enter a valid finishing position.");
       return;
     }
-    const entrantCount = entrantInput ? Number(entrantInput) : undefined;
     void api(`/api/admin/session-entries/${id}/points`, {
       method: "PATCH",
-      body: JSON.stringify({ finishingPosition, ...(entrantCount ? { entrantCount } : {}) }),
+      body: JSON.stringify({ finishingPosition }),
     })
       .then(() => {
         setEditingId(null);
@@ -66,6 +71,12 @@ export function SessionEntriesTable({ sessionId, editable }: { sessionId: string
   };
   const unmarkDnf = (id: string) => {
     void api(`/api/admin/session-entries/${id}/dnf`, { method: "DELETE" })
+      .then(load)
+      .catch((e: Error) => setError(e.message));
+  };
+
+  const undoSignout = (id: string) => {
+    void api(`/api/admin/session-entries/${id}/undo-signout`, { method: "POST" })
       .then(load)
       .catch((e: Error) => setError(e.message));
   };
@@ -110,12 +121,6 @@ export function SessionEntriesTable({ sessionId, editable }: { sessionId: string
                           placeholder="Pos"
                           className={`${inputCls} w-16`}
                         />
-                        <input
-                          value={entrantInput}
-                          onChange={(e) => setEntrantInput(e.target.value)}
-                          placeholder="N"
-                          className={`${inputCls} w-14`}
-                        />
                         <button className={btn} onClick={() => savePoints(row.id)}>
                           Save
                         </button>
@@ -135,6 +140,11 @@ export function SessionEntriesTable({ sessionId, editable }: { sessionId: string
                         ) : (
                           <button className={btn} onClick={() => markDnf(row.id)}>
                             Mark DNF
+                          </button>
+                        )}
+                        {row.signOutTime && !row.isDNF && (
+                          <button className={btn} onClick={() => undoSignout(row.id)}>
+                            Undo sign-out
                           </button>
                         )}
                       </div>
