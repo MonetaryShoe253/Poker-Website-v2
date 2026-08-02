@@ -530,7 +530,19 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
   // --- Kiosk (sign-in / sign-out) ---------------------------------------------------
 
-  function assertKioskOpen(status: string, reply: FastifyReply): boolean {
+  // Sign-outs stay open through LATE_REG_CLOSED — players still in the room
+  // need to be able to sign out right up to close. New sign-ins don't: once
+  // late reg closes, the field is locked and the kiosk should stop taking
+  // walk-ups.
+  function assertKioskSignInOpen(status: string, reply: FastifyReply): boolean {
+    if (status !== "OPEN") {
+      void reply.code(409).send({ error: "Late registration has closed — no more sign-ins." });
+      return false;
+    }
+    return true;
+  }
+
+  function assertKioskSignOutOpen(status: string, reply: FastifyReply): boolean {
     if (status !== "OPEN" && status !== "LATE_REG_CLOSED") {
       void reply.code(409).send({ error: "Session isn't open for the kiosk." });
       return false;
@@ -602,7 +614,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: "Bad sign-in request." });
     const session = await prisma.session.findUnique({ where: { id } });
     if (!session) return reply.code(404).send({ error: "No such session." });
-    if (!assertKioskOpen(session.status, reply)) return;
+    if (!assertKioskSignInOpen(session.status, reply)) return;
     const player = await prisma.player.findUnique({ where: { id: parsed.data.playerId } });
     if (!player) return reply.code(404).send({ error: "No such player." });
     const entry = await kioskSignInPlayer(id, player, reply);
@@ -623,7 +635,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: "Enter a name and a valid email." });
     const session = await prisma.session.findUnique({ where: { id } });
     if (!session) return reply.code(404).send({ error: "No such session." });
-    if (!assertKioskOpen(session.status, reply)) return;
+    if (!assertKioskSignInOpen(session.status, reply)) return;
     const existingPlayer = await prisma.player.findUnique({ where: { email: parsed.data.email } });
     const player =
       existingPlayer ??
@@ -677,7 +689,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: "Bad sign-out request." });
     const session = await prisma.session.findUnique({ where: { id } });
     if (!session) return reply.code(404).send({ error: "No such session." });
-    if (!assertKioskOpen(session.status, reply)) return;
+    if (!assertKioskSignOutOpen(session.status, reply)) return;
     const entry = await prisma.sessionEntry.findUnique({
       where: { id: parsed.data.entryId },
       include: { player: true },

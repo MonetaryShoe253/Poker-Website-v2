@@ -38,11 +38,18 @@ export function KioskView({
   sessionStatus: SessionStatus;
   format: TournamentFormat;
 }) {
-  const [mode, setMode] = useState<Mode>("signin");
+  const signInOpen = sessionStatus === "OPEN";
+  const kioskOpen = sessionStatus === "OPEN" || sessionStatus === "LATE_REG_CLOSED";
+  const [mode, setMode] = useState<Mode>(signInOpen ? "signin" : "signout");
   const [message, setMessage] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const kioskOpen = sessionStatus === "OPEN" || sessionStatus === "LATE_REG_CLOSED";
+  // Late reg closing while the kiosk is already open (e.g. mid sign-in queue)
+  // should immediately bump anyone out of sign-in mode — walk-ups stop, but
+  // players already at the table still need to be able to sign out.
+  useEffect(() => {
+    if (!signInOpen && mode === "signin") setMode("signout");
+  }, [signInOpen, mode]);
 
   if (!kioskOpen) {
     return (
@@ -56,7 +63,9 @@ export function KioskView({
     <div className="space-y-4">
       <div className="flex gap-2">
         <button
-          className={`flex-1 rounded-lg py-4 font-display text-lg tracking-wide ${
+          disabled={!signInOpen}
+          title={signInOpen ? undefined : "Late registration has closed — no more sign-ins."}
+          className={`flex-1 rounded-lg py-4 font-display text-lg tracking-wide disabled:cursor-not-allowed disabled:opacity-40 ${
             mode === "signin" ? "bg-ember-deep text-white" : "panel-steel text-muted hover:text-text"
           }`}
           onClick={() => {
@@ -78,6 +87,11 @@ export function KioskView({
           Sign out
         </button>
       </div>
+      {!signInOpen && (
+        <p className="text-center text-xs text-muted">
+          Late registration has closed — the kiosk only takes sign-outs now.
+        </p>
+      )}
 
       {message && (
         <div
