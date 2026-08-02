@@ -7,7 +7,7 @@ import {
 } from "../src/services/tournament";
 
 describe("tournament formula", () => {
-  const formula = { A: 2.5, B: 0.22, ITM_PERCENT: 0.2 };
+  const formula = { A: 2.5, B: 0.22, ITM_PERCENT: 0.2, BOUNTY_VALUE: 5 };
 
   it("scores floor(A * N * e^(-B*p)) for finishers inside the ICM cutoff", () => {
     expect(calculateTournamentPoints(1, 30, formula)).toBe(60);

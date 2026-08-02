@@ -7,6 +7,7 @@ import { KioskView } from "./KioskView";
 import { TournamentInfoView } from "./TournamentInfoView";
 
 type SessionStatus = "CREATED" | "SCHEDULED" | "OPEN" | "LATE_REG_CLOSED" | "CLOSED" | "ARCHIVED";
+type TournamentFormat = "REGULAR" | "BOUNTY";
 
 interface SessionDetail {
   id: string;
@@ -15,6 +16,7 @@ interface SessionDetail {
   type: "TOURNAMENT" | "CASH";
   date: string;
   status: SessionStatus;
+  format: TournamentFormat;
   ordinal: number | null;
   closedAt: string | null;
   scheduledStartAt: string | null;
@@ -60,7 +62,14 @@ export function SessionDetailView({ sessionId, onBack }: { sessionId: string; on
               {detail.seriesName} <span className="text-ember">·</span>{" "}
               {detail.ordinal ? formatOrdinal(detail.ordinal) : "—"} tournament
             </h2>
-            <span className="text-xs uppercase tracking-widest text-muted">{detail.status}</span>
+            <span className="flex items-center gap-2">
+              {detail.format === "BOUNTY" && (
+                <span className="rounded border border-ember/50 px-1.5 py-0.5 text-xs uppercase tracking-widest text-ember">
+                  Bounty
+                </span>
+              )}
+              <span className="text-xs uppercase tracking-widest text-muted">{detail.status}</span>
+            </span>
           </div>
           <p className="mt-1 text-xs text-muted">
             {new Date(detail.date).toLocaleDateString("en-GB", {
@@ -93,7 +102,9 @@ export function SessionDetailView({ sessionId, onBack }: { sessionId: string; on
                 ))}
               </nav>
               <div className="mt-5">
-                {tab === "kiosk" && <KioskView sessionId={sessionId} sessionStatus={detail.status} />}
+                {tab === "kiosk" && (
+                  <KioskView sessionId={sessionId} sessionStatus={detail.status} format={detail.format} />
+                )}
                 {tab === "info" && <TournamentInfoView sessionId={sessionId} />}
                 {tab === "admin" && (
                   <AdminView

@@ -7,6 +7,7 @@ import { ConfirmDeleteModal } from "../components/manage-tournament/ConfirmDelet
 import { CreateSeriesForm } from "../components/manage-tournament/CreateSeriesForm";
 import { SeriesParamsPanel } from "../components/manage-tournament/SeriesParamsPanel";
 import { SessionDetailView } from "../components/manage-tournament/SessionDetailView";
+import { TournamentFormulaPanel } from "../components/manage-tournament/TournamentFormulaPanel";
 
 interface Series {
   id: string;
@@ -195,6 +196,8 @@ export function ManageTournamentPage() {
               onCancel={() => setShowCreateForm(false)}
             />
           )}
+
+          {!showCreateForm && <TournamentFormulaPanel />}
 
           {selectedSeriesId && !showCreateForm && <SeriesParamsPanel seriesId={selectedSeriesId} />}
 

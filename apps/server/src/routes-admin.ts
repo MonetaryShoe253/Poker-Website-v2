@@ -260,6 +260,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
    * post-close correction so points never go stale relative to position. */
   async function finalizeSessionScoring(sessionId: string, seriesId: string): Promise<void> {
     await compressPositions(sessionId);
+    const session = await prisma.session.findUniqueOrThrow({ where: { id: sessionId }, select: { format: true } });
     const entrantCount = await prisma.sessionEntry.count({ where: { sessionId, voidedAt: null } });
     const formula = await getTournamentFormula();
     const entries = await prisma.sessionEntry.findMany({ where: { sessionId, voidedAt: null } });
@@ -274,10 +275,16 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         create: { playerId: entry.playerId, seriesId, currentStreak, longestStreak, streakBonus },
       });
 
+      // A bounty collected before busting still counts — matches how real
+      // bounty tournaments work, so a DNF doesn't zero it out like it does
+      // basePoints/floorPoints.
+      const bountyPoints =
+        session.format === "BOUNTY" ? (entry.bountiesCollected ?? 0) * formula.BOUNTY_VALUE : 0;
+
       if (isDnf) {
         await prisma.sessionEntry.update({
           where: { id: entry.id },
-          data: { entrantCount, basePoints: 0, floorPoints: 0, points: 0 },
+          data: { entrantCount, basePoints: 0, floorPoints: 0, bountyPoints, points: Math.floor(bountyPoints) },
         });
       } else {
         const basePoints = calculateTournamentPoints(entry.finishingPosition, entrantCount, formula);
@@ -288,7 +295,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
             entrantCount,
             basePoints,
             floorPoints: floored - basePoints,
-            points: floored + streakBonus,
+            bountyPoints,
+            points: Math.floor(floored + streakBonus + bountyPoints),
           },
         });
       }
@@ -331,6 +339,22 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.code(400).send({ error: "Bad active player count." });
     await prisma.session.update({ where: { id }, data: { activePlayerCount: parsed.data.activePlayerCount } });
     await audit(admin.userId, "session.activePlayerCount", { sessionId: id, activePlayerCount: parsed.data.activePlayerCount });
+    return { ok: true };
+  });
+
+  app.put("/api/admin/sessions/:id/format", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ format: z.enum(["REGULAR", "BOUNTY"]) }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad tournament format." });
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (session.status !== "CREATED" && session.status !== "SCHEDULED") {
+      return reply.code(409).send({ error: "Format can only be set before the session opens." });
+    }
+    await prisma.session.update({ where: { id }, data: { format: parsed.data.format } });
+    await audit(admin.userId, "session.format.set", { sessionId: id, format: parsed.data.format });
     return { ok: true };
   });
 
@@ -457,6 +481,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       type: session.type,
       date: session.date,
       status: session.status,
+      format: session.format,
       code: session.code,
       ordinal: ordinalIndex === -1 ? null : ordinalIndex + 1,
       activePlayerCount: session.activePlayerCount,
@@ -493,6 +518,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       finishingPosition: e.finishingPosition,
       entrantCount: e.entrantCount,
       points: e.points,
+      bountiesCollected: e.bountiesCollected,
+      bountyPoints: e.bountyPoints,
       isDNF: e.finishingPosition === DNF_POSITION_SENTINEL,
       voided: e.voidedAt !== null,
       voidedAt: e.voidedAt,
@@ -559,6 +586,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
             finishingPosition: null,
             entrantCount: null,
             points: null,
+            bountiesCollected: null,
+            bountyPoints: null,
           },
         })
       : prisma.sessionEntry.create({ data: { sessionId, playerId: player.id, signInTime: new Date() } });
@@ -636,7 +665,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }));
   });
 
-  const KioskSignoutBody = z.object({ entryId: z.string().min(1) });
+  const KioskSignoutBody = z.object({
+    entryId: z.string().min(1),
+    bountiesCollected: z.number().int().min(0).optional(),
+  });
   app.post("/api/admin/sessions/:id/kiosk/signout", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
@@ -667,8 +699,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     const finishingPosition = activePlayerCount;
+    const bountiesCollected = parsed.data.bountiesCollected ?? 0;
     await prisma.$transaction([
-      prisma.sessionEntry.update({ where: { id: entry.id }, data: { signOutTime: new Date(), finishingPosition } }),
+      prisma.sessionEntry.update({
+        where: { id: entry.id },
+        data: { signOutTime: new Date(), finishingPosition, bountiesCollected },
+      }),
       prisma.session.update({ where: { id }, data: { activePlayerCount: Math.max(0, activePlayerCount - 1) } }),
     ]);
     const totalEnteredSoFar = await prisma.sessionEntry.count({ where: { sessionId: id, voidedAt: null } });
@@ -710,6 +746,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         entrantCount: null,
         basePoints: null,
         floorPoints: null,
+        bountiesCollected: null,
+        bountyPoints: null,
         points: null,
       },
     });
@@ -856,6 +894,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       .int()
       .min(1)
       .refine((v) => v !== DNF_POSITION_SENTINEL, "Use the DNF routes to mark a DNF."),
+    bountiesCollected: z.number().int().min(0).optional(),
   });
   app.patch("/api/admin/session-entries/:id/points", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
@@ -870,7 +909,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }
     await prisma.sessionEntry.update({
       where: { id },
-      data: { finishingPosition: parsed.data.finishingPosition },
+      data: {
+        finishingPosition: parsed.data.finishingPosition,
+        ...(parsed.data.bountiesCollected !== undefined
+          ? { bountiesCollected: parsed.data.bountiesCollected }
+          : {}),
+      },
     });
     // A manual override still goes through the same floor/streak pipeline
     // as everyone else in the session, not a bare formula calculation, and
@@ -1109,6 +1153,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       A: z.number(),
       B: z.number(),
       ITM_PERCENT: z.number(),
+      BOUNTY_VALUE: z.number(),
     }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad formula." });
     for (const [key, value] of Object.entries(parsed.data)) {

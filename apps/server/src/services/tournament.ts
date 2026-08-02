@@ -5,6 +5,7 @@ export interface TournamentFormula {
   A: number;
   B: number;
   ITM_PERCENT: number;
+  BOUNTY_VALUE: number;
 }
 
 /** floor(A * N * e^(-B*p)) for finishers inside the cutoff, 0 outside it. */
@@ -38,12 +39,15 @@ export function applyStreakMiss(currentWeeks: number): number {
 }
 
 export async function getTournamentFormula(): Promise<TournamentFormula> {
-  const rows = await prisma.formulaConfig.findMany({ where: { key: { in: ["A", "B", "ITM_PERCENT"] } } });
+  const rows = await prisma.formulaConfig.findMany({
+    where: { key: { in: ["A", "B", "ITM_PERCENT", "BOUNTY_VALUE"] } },
+  });
   const map = new Map(rows.map((row) => [row.key, Number(row.value)]));
   return {
     A: map.get("A") ?? 2.5,
     B: map.get("B") ?? 0.22,
     ITM_PERCENT: map.get("ITM_PERCENT") ?? 0.2,
+    BOUNTY_VALUE: map.get("BOUNTY_VALUE") ?? 5,
   };
 }
 
@@ -51,6 +55,7 @@ const FORMULA_DEFAULTS = [
   { key: "A", value: "2.5" },
   { key: "B", value: "0.22" },
   { key: "ITM_PERCENT", value: "0.2" },
+  { key: "BOUNTY_VALUE", value: "5" },
 ];
 
 /** Seeds default formula values for keys that don't exist yet. Never

@@ -13,6 +13,9 @@ CREATE TYPE "SessionStatus" AS ENUM ('CREATED', 'SCHEDULED', 'OPEN', 'LATE_REG_C
 -- CreateEnum
 CREATE TYPE "SeriesStatus" AS ENUM ('ACTIVE', 'ARCHIVED');
 
+-- CreateEnum
+CREATE TYPE "TournamentFormat" AS ENUM ('REGULAR', 'BOUNTY');
+
 -- CreateTable
 CREATE TABLE "user" (
     "id" TEXT NOT NULL,
@@ -132,6 +135,7 @@ CREATE TABLE "session" (
     "estimatedDuration" DOUBLE PRECISION,
     "expectedPlayerCount" INTEGER,
     "status" "SessionStatus" NOT NULL DEFAULT 'CREATED',
+    "format" "TournamentFormat" NOT NULL DEFAULT 'REGULAR',
     "activePlayerCount" INTEGER,
     "blindSchedule" JSONB,
     "currentBlindLevel" INTEGER NOT NULL DEFAULT 0,
@@ -158,6 +162,8 @@ CREATE TABLE "session_entry" (
     "position" INTEGER,
     "basePoints" DOUBLE PRECISION,
     "floorPoints" DOUBLE PRECISION,
+    "bountiesCollected" INTEGER,
+    "bountyPoints" DOUBLE PRECISION,
     "isDNF" BOOLEAN NOT NULL DEFAULT false,
     "finishingPosition" INTEGER,
     "entrantCount" INTEGER,

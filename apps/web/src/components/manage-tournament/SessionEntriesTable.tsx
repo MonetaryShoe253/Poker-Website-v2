@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, btn, inputCls } from "../../lib/adminShared";
 
+type TournamentFormat = "REGULAR" | "BOUNTY";
+
 interface EntryRow {
   id: string;
   playerId: string;
@@ -11,6 +13,8 @@ interface EntryRow {
   finishingPosition: number | null;
   entrantCount: number | null;
   points: number | null;
+  bountiesCollected: number | null;
+  bountyPoints: number | null;
   isDNF: boolean;
   voided: boolean;
   voidedAt: string | null;
@@ -25,15 +29,19 @@ export function SessionEntriesTable({
   sessionId,
   editable,
   refreshKey,
+  format,
 }: {
   sessionId: string;
   editable: boolean;
   refreshKey?: number;
+  format?: TournamentFormat;
 }) {
   const [rows, setRows] = useState<EntryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [posInput, setPosInput] = useState("");
+  const [bountiesInput, setBountiesInput] = useState("");
+  const showBounties = format === "BOUNTY";
 
   const load = useCallback(
     () => void api<EntryRow[]>(`/api/admin/sessions/${sessionId}/entries`).then(setRows),
@@ -44,6 +52,7 @@ export function SessionEntriesTable({
   const startEdit = (row: EntryRow) => {
     setEditingId(row.id);
     setPosInput(row.finishingPosition && !row.isDNF ? String(row.finishingPosition) : "");
+    setBountiesInput(row.bountiesCollected !== null ? String(row.bountiesCollected) : "0");
   };
 
   const savePoints = (id: string) => {
@@ -52,9 +61,14 @@ export function SessionEntriesTable({
       setError("Enter a valid finishing position.");
       return;
     }
+    const bountiesCollected = Number(bountiesInput);
+    if (showBounties && (!Number.isInteger(bountiesCollected) || bountiesCollected < 0)) {
+      setError("Enter a valid bounty count.");
+      return;
+    }
     void api(`/api/admin/session-entries/${id}/points`, {
       method: "PATCH",
-      body: JSON.stringify({ finishingPosition }),
+      body: JSON.stringify({ finishingPosition, ...(showBounties ? { bountiesCollected } : {}) }),
     })
       .then(() => {
         setEditingId(null);
@@ -94,6 +108,7 @@ export function SessionEntriesTable({
               <th className="py-2 pr-2">Signed in</th>
               <th className="py-2 pr-2">Signed out</th>
               <th className="py-2 pr-2">Position</th>
+              {showBounties && <th className="py-2 pr-2">Bounties</th>}
               <th className="py-2 pr-2">Points</th>
               {editable && <th className="py-2 pr-2">Actions</th>}
             </tr>
@@ -110,6 +125,7 @@ export function SessionEntriesTable({
                 <td className="py-1.5 pr-2 tnum">
                   {row.isDNF ? <span className="text-ember">DNF</span> : (row.finishingPosition ?? "—")}
                 </td>
+                {showBounties && <td className="py-1.5 pr-2 tnum">{row.bountiesCollected ?? 0}</td>}
                 <td className="py-1.5 pr-2 tnum">{row.points ?? "—"}</td>
                 {editable && (
                   <td className="py-1.5 pr-2">
@@ -121,6 +137,14 @@ export function SessionEntriesTable({
                           placeholder="Pos"
                           className={`${inputCls} w-16`}
                         />
+                        {showBounties && (
+                          <input
+                            value={bountiesInput}
+                            onChange={(e) => setBountiesInput(e.target.value)}
+                            placeholder="Bounties"
+                            className={`${inputCls} w-16`}
+                          />
+                        )}
                         <button className={btn} onClick={() => savePoints(row.id)}>
                           Save
                         </button>
@@ -155,7 +179,10 @@ export function SessionEntriesTable({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={editable ? 6 : 5} className="py-3 text-center text-muted">
+                <td
+                  colSpan={(editable ? 6 : 5) + (showBounties ? 1 : 0)}
+                  className="py-3 text-center text-muted"
+                >
                   No entries yet.
                 </td>
               </tr>

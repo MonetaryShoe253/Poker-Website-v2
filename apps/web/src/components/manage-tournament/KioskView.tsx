@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, btn, btnPrimary, inputCls } from "../../lib/adminShared";
 
 type SessionStatus = "CREATED" | "SCHEDULED" | "OPEN" | "LATE_REG_CLOSED" | "CLOSED" | "ARCHIVED";
+type TournamentFormat = "REGULAR" | "BOUNTY";
 
 interface PlayerResult {
   playerId: string;
@@ -28,7 +29,15 @@ function useDebounced(value: string, delayMs: number): string {
   return debounced;
 }
 
-export function KioskView({ sessionId, sessionStatus }: { sessionId: string; sessionStatus: SessionStatus }) {
+export function KioskView({
+  sessionId,
+  sessionStatus,
+  format,
+}: {
+  sessionId: string;
+  sessionStatus: SessionStatus;
+  format: TournamentFormat;
+}) {
   const [mode, setMode] = useState<Mode>("signin");
   const [message, setMessage] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -83,7 +92,12 @@ export function KioskView({ sessionId, sessionStatus }: { sessionId: string; ses
       {mode === "signin" ? (
         <SignInPanel sessionId={sessionId} setMessage={setMessage} searchInputRef={searchInputRef} />
       ) : (
-        <SignOutPanel sessionId={sessionId} setMessage={setMessage} searchInputRef={searchInputRef} />
+        <SignOutPanel
+          sessionId={sessionId}
+          format={format}
+          setMessage={setMessage}
+          searchInputRef={searchInputRef}
+        />
       )}
     </div>
   );
@@ -230,10 +244,12 @@ function SignInPanel({
 
 function SignOutPanel({
   sessionId,
+  format,
   setMessage,
   searchInputRef,
 }: {
   sessionId: string;
+  format: TournamentFormat;
   setMessage: (m: { text: string; tone: "ok" | "error" } | null) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
@@ -241,6 +257,7 @@ function SignOutPanel({
   const debounced = useDebounced(query, 300);
   const [results, setResults] = useState<CurrentEntry[] | null>(null);
   const [pending, setPending] = useState<CurrentEntry | null>(null);
+  const [bountiesInput, setBountiesInput] = useState("0");
   const [busy, setBusy] = useState(false);
 
   const load = (q: string) => {
@@ -256,9 +273,10 @@ function SignOutPanel({
   const confirmSignOut = () => {
     if (!pending) return;
     setBusy(true);
+    const bountiesCollected = Number(bountiesInput) || 0;
     void api<{ ok: true; entry: { displayName: string; finishingPosition: number; entrantCount: number } }>(
       `/api/admin/sessions/${sessionId}/kiosk/signout`,
-      { method: "POST", body: JSON.stringify({ entryId: pending.entryId }) },
+      { method: "POST", body: JSON.stringify({ entryId: pending.entryId, bountiesCollected }) },
     )
       .then((res) => {
         setMessage({
@@ -282,6 +300,18 @@ function SignOutPanel({
             Sign out <span className="text-ember">{pending.displayName}</span>?
           </p>
           <p className="mt-1 text-xs text-muted">This can't be undone from here — an admin can reverse it later.</p>
+          {format === "BOUNTY" && (
+            <label className="mt-3 block text-xs text-muted">
+              Bounties collected
+              <input
+                type="number"
+                min={0}
+                value={bountiesInput}
+                onChange={(e) => setBountiesInput(e.target.value)}
+                className={`${inputCls} mt-1 w-full text-center`}
+              />
+            </label>
+          )}
           <div className="mt-4 flex justify-center gap-2">
             <button className={btnPrimary} disabled={busy} onClick={confirmSignOut}>
               Confirm sign-out
@@ -307,7 +337,10 @@ function SignOutPanel({
             {results?.map((e) => (
               <button
                 key={e.entryId}
-                onClick={() => setPending(e)}
+                onClick={() => {
+                  setPending(e);
+                  setBountiesInput("0");
+                }}
                 className="flex w-full items-center justify-between rounded border border-steel px-4 py-3 text-left hover:border-ember"
               >
                 <span className="font-display">{e.displayName}</span>

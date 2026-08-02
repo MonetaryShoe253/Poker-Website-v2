@@ -33,6 +33,11 @@ enum SeriesStatus {
   ARCHIVED
 }
 
+enum TournamentFormat {
+  REGULAR
+  BOUNTY
+}
+
 // ---------------------------------------------------------------------------
 // Identity — User is shared between Better Auth and the app
 // ---------------------------------------------------------------------------
@@ -178,6 +183,7 @@ model Session {
   estimatedDuration Float?
   expectedPlayerCount Int?
   status            SessionStatus @default(CREATED)
+  format            TournamentFormat @default(REGULAR)
   activePlayerCount Int?
   blindSchedule     Json?
   currentBlindLevel Int           @default(0)
@@ -210,6 +216,8 @@ model SessionEntry {
   position            Int?
   basePoints          Float?
   floorPoints         Float?
+  bountiesCollected   Int?
+  bountyPoints        Float?
   isDNF               Boolean   @default(false)
 
   finishingPosition   Int?

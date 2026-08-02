@@ -15,9 +15,12 @@ interface BlindLevel {
   isBreak?: boolean;
 }
 
+type TournamentFormat = "REGULAR" | "BOUNTY";
+
 interface SessionDetail {
   id: string;
   status: SessionStatus;
+  format: TournamentFormat;
   activePlayerCount: number | null;
   blindSchedule: BlindLevel[] | null;
   currentBlindLevel: number;
@@ -108,6 +111,11 @@ export function AdminView({
     }
   })();
 
+  const formatEditable = detail.status === "CREATED" || detail.status === "SCHEDULED";
+  const saveFormat = (format: TournamentFormat) => {
+    run(`/api/admin/sessions/${sessionId}/format`, "PUT", { format });
+  };
+
   const saveActiveCount = () => {
     const n = Number(activeCountInput);
     if (!Number.isInteger(n) || n < 0) {
@@ -174,6 +182,27 @@ export function AdminView({
             </button>
           )}
         </div>
+      </div>
+
+      <div className="panel-steel rounded-lg p-4">
+        <div className="font-display text-xs uppercase tracking-widest text-muted">Tournament format</div>
+        {formatEditable ? (
+          <div className="mt-2 flex items-center gap-2">
+            <select
+              value={detail.format}
+              onChange={(e) => saveFormat(e.target.value as TournamentFormat)}
+              className={inputCls}
+            >
+              <option value="REGULAR">Regular</option>
+              <option value="BOUNTY">Bounty</option>
+            </select>
+          </div>
+        ) : (
+          <div className="mt-1 text-sm">
+            {detail.format === "BOUNTY" ? "Bounty" : "Regular"}{" "}
+            <span className="text-xs text-muted">— locked once the session opens</span>
+          </div>
+        )}
       </div>
 
       <div className="panel-steel rounded-lg p-4">
@@ -314,6 +343,7 @@ export function AdminView({
             sessionId={sessionId}
             editable={detail.status !== "CREATED" && detail.status !== "SCHEDULED" && detail.status !== "ARCHIVED"}
             refreshKey={entriesVersion}
+            format={detail.format}
           />
         </div>
       </div>
