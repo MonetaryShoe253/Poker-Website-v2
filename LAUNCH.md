@@ -16,6 +16,9 @@ create the external accounts). Code is on branch `launch-prep-hardening`.
 - [x] **Domain pre-wired** — `canonical` + `og:url` set to `https://uospoker.co.uk/`, and
   `og:image`/`twitter:image` made absolute (`apps/web/index.html`). Verified: web build green.
 - [x] **LICENSE** — MIT (`LICENSE`, `"license": "MIT"` in root `package.json`).
+- [x] **Bootstrap admin account** — set `ADMIN_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD` and the first
+  boot creates that admin, pre-verified, automatically (`apps/server/src/auth.ts`,
+  `ensureBootstrapAdmin`). Further admins: `/admin` → Users → Promote (nav link added for admins).
 
 ## To do — needs your input/action
 
@@ -33,6 +36,11 @@ Do these roughly in order; later steps depend on Railway being up.
   - `RESEND_API_KEY=` → from step 1
   - `EMAIL_FROM=UOS Poker <noreply@uospoker.co.uk>`
   - `ADMIN_EMAIL=kiranschahal@gmail.com`
+  - `ADMIN_BOOTSTRAP_PASSWORD=` → pick a password (10+ characters) — this creates that admin
+    account automatically, pre-verified, the moment the server first boots, so there's a working
+    login immediately without waiting on a real sign-up + verification email. Safe to remove
+    from Railway's env vars after the first successful boot (it never touches the account again
+    once it exists).
   - (The env guard fails the boot loudly if the secret/URLs are wrong — that's expected.)
   - On first prod boot the logs print the **SPF + DMARC** records to add at Porkbun.
 - [ ] **3. DNS at Porkbun.** In Porkbun → `uospoker.co.uk` → DNS, add:
@@ -45,10 +53,11 @@ Do these roughly in order; later steps depend on Railway being up.
 - [ ] **5. (Optional) Google sign-in.** Google Cloud Console → Credentials → OAuth client (Web).
   Redirect URI: `https://uospoker.co.uk/api/auth/callback/google`. Set `GOOGLE_CLIENT_ID` /
   `GOOGLE_CLIENT_SECRET` in Railway. Email/password works fully without this.
-- [ ] **6. Smoke-test the live deploy.** Sign up with `ADMIN_EMAIL` → verify via Resend email →
-  onboard nickname (auto-promoted to admin at `/admin`) → play a hand → submit a session
-  result. Also test **Play as guest** (practice works, rated seats blocked). Check on a phone
-  (≤360px).
+- [ ] **6. Smoke-test the live deploy.** Sign in with `ADMIN_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD`
+  (account already exists and is pre-verified — see step 2) → onboard a nickname → check "Admin"
+  and "Tournament management" show in the nav → play a hand → submit a session result. To add
+  further admins later: `/admin` → Users tab → search → Promote. Also test **Play as guest**
+  (practice works, rated seats blocked). Check on a phone (≤360px).
 - [ ] **7. (Optional) Ops hardening.** Enable Railway Postgres backups; consider error
   monitoring (e.g. Sentry); fill `SOCIETY.contactEmail` in `apps/web/src/content/society.ts`
   (currently `null` → renders "TBA"; e.g. a `@uospoker.co.uk` mailbox once you create one).

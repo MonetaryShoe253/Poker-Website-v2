@@ -115,6 +115,39 @@ export const auth = betterAuth({
 
 export type AuthSessionData = Awaited<ReturnType<typeof auth.api.getSession>>;
 
+/**
+ * Guarantees a working admin login exists the moment a fresh deploy comes up,
+ * rather than depending on someone signing up and clicking a verification
+ * email first. Opt-in via ADMIN_EMAIL + ADMIN_BOOTSTRAP_PASSWORD; a no-op if
+ * either is unset, or if that email already has an account (never touches an
+ * existing account's password — this only ever creates the very first one).
+ * Goes through the real sign-up endpoint so it gets the same
+ * hashing/validation/databaseHooks (role auto-promotion, linked Player row)
+ * as any other signup — the one deliberate shortcut is marking the email
+ * verified immediately, since these credentials came from a trusted
+ * deploy-only env var, not an inbox a stranger controls.
+ */
+export async function ensureBootstrapAdmin(port: number): Promise<void> {
+  if (!env.ADMIN_EMAIL || !env.ADMIN_BOOTSTRAP_PASSWORD) return;
+  const existing = await prisma.user.findUnique({ where: { email: env.ADMIN_EMAIL } });
+  if (existing) return;
+  const res = await fetch(`http://127.0.0.1:${port}/api/auth/sign-up/email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: env.SITE_URL },
+    body: JSON.stringify({
+      email: env.ADMIN_EMAIL,
+      password: env.ADMIN_BOOTSTRAP_PASSWORD,
+      name: "Admin",
+    }),
+  });
+  if (!res.ok) {
+    console.error("[bootstrap] failed to create the seed admin account:", await res.text());
+    return;
+  }
+  await prisma.user.update({ where: { email: env.ADMIN_EMAIL }, data: { emailVerified: true } });
+  console.log(`[bootstrap] seed admin account ready: ${env.ADMIN_EMAIL}`);
+}
+
 /** Resolve a session from raw request headers (REST and socket handshakes). */
 export async function sessionFromHeaders(rawHeaders: {
   cookie?: string | undefined;

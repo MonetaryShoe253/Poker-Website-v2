@@ -68,7 +68,11 @@ export function Layout() {
   const { me } = useMe();
   const items =
     me?.user?.role === "ADMIN"
-      ? [...navItems, { to: "/manage-tournament", label: "Tournament management" }]
+      ? [
+          ...navItems,
+          { to: "/manage-tournament", label: "Tournament management" },
+          { to: "/admin", label: "Admin" },
+        ]
       : navItems;
 
   return (

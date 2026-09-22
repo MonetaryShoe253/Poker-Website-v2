@@ -7,7 +7,7 @@ import {
   hydrateBankroll,
   type UserCtx,
 } from "./realtime/users";
-import { sessionFromHeaders } from "./auth";
+import { ensureBootstrapAdmin, sessionFromHeaders } from "./auth";
 import { prisma } from "./db";
 import { env, isProd } from "./env";
 import { startSessionScheduler, stopSessionScheduler } from "./services/seasons";
@@ -100,6 +100,7 @@ try {
   await app.listen({ port: env.PORT, host: "0.0.0.0" });
   app.log.info(`UOS Poker server listening on :${env.PORT}`);
   printResendDnsRecords();
+  void ensureBootstrapAdmin(env.PORT).catch((err) => app.log.error({ err }, "admin bootstrap failed"));
 } catch (err) {
   app.log.error(err);
   process.exit(1);

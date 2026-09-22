@@ -22,6 +22,7 @@ const EnvSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default("UOS Poker <noreply@example.com>"),
   ADMIN_EMAIL: z.string().optional(),
+  ADMIN_BOOTSTRAP_PASSWORD: z.string().optional(),
 });
 
 export const env = EnvSchema.parse(process.env);

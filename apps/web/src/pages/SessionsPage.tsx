@@ -13,7 +13,7 @@ interface UpcomingSession {
 export function SessionsPage() {
   usePageMeta(
     "Sessions",
-    "Tuesday tournaments and Thursday cash games, 17:00–20:00: what to expect at your first UOS Poker session.",
+    "Tuesday tournaments and Thursday cash games, 18:00–21:30: what to expect at your first UOS Poker session.",
   );
   const [upcoming, setUpcoming] = useState<UpcomingSession[]>([]);
   useEffect(() => {
@@ -29,8 +29,7 @@ export function SessionsPage() {
         <SectionTitle kicker="Weekly sessions">Two nights, two games</SectionTitle>
         <p className="mt-3 max-w-2xl text-muted">
           {SOCIETY.sessionTimes} at {SOCIETY.venueName}, {SOCIETY.venueAddress}. Turn up any
-          week. No sign-up needed beyond SU membership, and your first visit can just be a
-          look around.
+          week. No sign-up needed beyond SU membership, and your first visit is completely free.
         </p>
       </Reveal>
 
@@ -38,7 +37,7 @@ export function SessionsPage() {
         <Reveal>
           <article className="panel-steel h-full rounded-lg p-6">
             <p className="font-display text-xs uppercase tracking-[0.3em] text-ember">
-              Tuesday · 17:00–20:00
+              Tuesday · 18:00–21:30
             </p>
             <h2 className="mt-2 font-display text-2xl font-semibold">The Tournament</h2>
             <dl className="mt-4 space-y-3 text-sm">
@@ -73,7 +72,7 @@ export function SessionsPage() {
         <Reveal delay={0.1}>
           <article className="panel-steel h-full rounded-lg p-6">
             <p className="font-display text-xs uppercase tracking-[0.3em] text-ember">
-              Thursday · 17:00–20:00
+              Thursday · 18:00–21:30
             </p>
             <h2 className="mt-2 font-display text-2xl font-semibold">The Cash Game</h2>
             <dl className="mt-4 space-y-3 text-sm">
@@ -154,6 +153,7 @@ export function SessionsPage() {
                 <li key={s.id} className="flex justify-between">
                   <span className="text-text">
                     {new Date(s.date).toLocaleDateString("en-GB", {
+                      timeZone: "Europe/London",
                       weekday: "long",
                       day: "numeric",
                       month: "long",
