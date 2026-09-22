@@ -22,10 +22,13 @@ overrides:
   ws: ^8.21.1
   find-my-way: ^9.7.0
   brace-expansion: ^5.0.9
-  ajv>fast-uri: ^3.1.4
-  "@fastify/ajv-compiler>fast-uri": ^3.1.4
-  "fast-json-stringify@6.4.0>fast-uri": ^3.1.4
+  ajv>fast-uri: ^3.1.5
+  "@fastify/ajv-compiler>fast-uri": ^3.1.5
+  "fast-json-stringify@6.4.0>fast-uri": ^3.1.5
+  "fast-json-stringify@7.0.1>fast-uri": ^4.1.2
   postcss: ^8.5.25
+  socket.io-parser: ^4.2.7
+  deepmerge-ts: ^8.0.0
 
 onlyBuiltDependencies:
   - "@embedded-postgres/windows-x64"
