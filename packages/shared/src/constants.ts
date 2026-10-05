@@ -109,9 +109,6 @@ export const SESSION_CODE_LENGTH = 6;
 /** Submission window on the session day, Europe/London. */
 export const SUBMISSION_WINDOW = { openHour: 17, closeHour: 23, closeMinute: 59 } as const;
 
-/** Fixed late-registration window for tournament series — not per-series yet. */
-export const TOURNAMENT_LATE_REG_WINDOW_MINUTES = 70;
-
 /** A finishing position at or better than this counts as "reaching the final table". */
 export const FINAL_TABLE_SIZE = 9;
 

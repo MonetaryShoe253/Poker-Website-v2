@@ -162,6 +162,7 @@ model Series {
   // and a headcount estimate applied to every not-yet-opened session in the series.
   sessionStartMinutesOfDay Int?
   sessionDurationMinutes   Int?
+  lateRegWindowMinutes     Int?
   expectedPlayerCount      Int?
 
   sessions     Session[]
@@ -181,6 +182,7 @@ model Session {
   scheduledStartTime DateTime?
   actualStartTime   DateTime?
   estimatedDuration Float?
+  lateRegWindowMinutes Int?
   expectedPlayerCount Int?
   status            SessionStatus @default(CREATED)
   format            TournamentFormat @default(REGULAR)

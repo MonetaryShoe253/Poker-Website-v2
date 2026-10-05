@@ -183,6 +183,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         status: "OPEN",
         scheduledStartTime,
         estimatedDuration: session.series.sessionDurationMinutes,
+        lateRegWindowMinutes: session.series.lateRegWindowMinutes,
         ...(shouldAutoStartTimer
           ? { currentBlindLevel: 0, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false }
           : {}),
@@ -1020,6 +1021,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     sessionStartMinutesOfDay: z.number().int().min(0).max(1439),
     sessionDurationMinutes: z.number().int().min(1),
+    lateRegWindowMinutes: z.number().int().min(1),
   });
   app.post("/api/admin/tournament-series", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
@@ -1046,12 +1048,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       isActive: series.isActive,
       sessionStartMinutesOfDay: series.sessionStartMinutesOfDay,
       sessionDurationMinutes: series.sessionDurationMinutes,
+      lateRegWindowMinutes: series.lateRegWindowMinutes,
     };
   });
 
   const TournamentSeriesParamsBody = z.object({
-    sessionStartMinutesOfDay: z.number().int().min(0).max(1439),
-    sessionDurationMinutes: z.number().int().min(1),
+    name: z.string().min(1).max(60).optional(),
+    sessionStartMinutesOfDay: z.number().int().min(0).max(1439).optional(),
+    sessionDurationMinutes: z.number().int().min(1).optional(),
+    lateRegWindowMinutes: z.number().int().min(1).optional(),
   });
   app.put("/api/admin/tournament-series/:id/params", async (req, reply) => {
     const admin = await requireAdmin(req, reply);

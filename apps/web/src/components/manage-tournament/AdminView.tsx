@@ -44,6 +44,7 @@ export function AdminView({
   const [error, setError] = useState<string | null>(null);
   const [activeCountInput, setActiveCountInput] = useState("");
   const [levels, setLevels] = useState<BlindLevel[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   // SessionEntriesTable fetches its own data keyed on sessionId, which never
   // changes when a lifecycle action (e.g. Close, which finalizes everyone's
@@ -58,6 +59,36 @@ export function AdminView({
     });
   }, [sessionId]);
   useEffect(load, [load]);
+
+  // Drag-to-reorder blind levels: pointer events (not HTML5 drag-and-drop, which
+  // has poor touch support) with a global move/up listener while a row's handle
+  // is held, reordering live as the pointer passes over another row — a plain
+  // "hover swap" reorder, no library needed.
+  useEffect(() => {
+    if (dragIndex === null) return;
+    const onMove = (e: PointerEvent) => {
+      const row = document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest<HTMLElement>("[data-level-index]");
+      if (!row) return;
+      const overIndex = Number(row.dataset.levelIndex);
+      if (overIndex === dragIndex) return;
+      setLevels((prev) => {
+        const next = [...prev];
+        const [moved] = next.splice(dragIndex, 1);
+        next.splice(overIndex, 0, moved!);
+        return next;
+      });
+      setDragIndex(overIndex);
+    };
+    const onUp = () => setDragIndex(null);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [dragIndex]);
 
   const run = (path: string, method: string, body?: unknown) => {
     void api(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) })
@@ -269,8 +300,21 @@ export function AdminView({
             l.isBreak ? (
               <div
                 key={i}
-                className="flex flex-wrap items-center gap-2 rounded border border-purple-400/30 bg-purple-400/10 px-2 py-1.5 text-sm"
+                data-level-index={i}
+                className={`flex flex-wrap items-center gap-2 rounded border border-purple-400/30 bg-purple-400/10 px-2 py-1.5 text-sm ${
+                  dragIndex === i ? "opacity-40" : ""
+                }`}
               >
+                <span
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    setDragIndex(i);
+                  }}
+                  style={{ touchAction: "none" }}
+                  className="cursor-grab select-none text-muted"
+                >
+                  ⠿
+                </span>
                 <span className="w-6 text-muted">{i + 1}.</span>
                 <span className="font-display text-xs uppercase tracking-widest text-purple-300">Break</span>
                 <input
@@ -284,7 +328,21 @@ export function AdminView({
                 </button>
               </div>
             ) : (
-              <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+              <div
+                key={i}
+                data-level-index={i}
+                className={`flex flex-wrap items-center gap-2 text-sm ${dragIndex === i ? "opacity-40" : ""}`}
+              >
+                <span
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    setDragIndex(i);
+                  }}
+                  style={{ touchAction: "none" }}
+                  className="cursor-grab select-none text-muted"
+                >
+                  ⠿
+                </span>
                 <span className="w-6 text-muted">{i + 1}.</span>
                 <input
                   value={l.smallBlind}

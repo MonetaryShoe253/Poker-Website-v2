@@ -1,9 +1,5 @@
 import type { Prisma, Series, Session } from "@prisma/client";
-import {
-  FIXED_TOURNAMENT_BLIND_SCHEDULE,
-  SUBMISSION_WINDOW,
-  TOURNAMENT_LATE_REG_WINDOW_MINUTES,
-} from "@uos-poker/shared";
+import { FIXED_TOURNAMENT_BLIND_SCHEDULE, SUBMISSION_WINDOW } from "@uos-poker/shared";
 import { prisma } from "../db";
 import { addLondonDays, londonDateAndMinutesToUtc, londonParts, londonToUtc } from "../time";
 import { generateSessionCode } from "./seasons";
@@ -22,6 +18,7 @@ export interface CreateTournamentSeriesInput {
   endDate: string; // "YYYY-MM-DD", London calendar date, inclusive
   sessionStartMinutesOfDay: number;
   sessionDurationMinutes: number;
+  lateRegWindowMinutes: number;
 }
 
 function parseDateOnly(value: string): { year: number; month: number; day: number } {
@@ -46,6 +43,7 @@ export async function createTournamentSeries(
       status: "ACTIVE",
       sessionStartMinutesOfDay: input.sessionStartMinutesOfDay,
       sessionDurationMinutes: input.sessionDurationMinutes,
+      lateRegWindowMinutes: input.lateRegWindowMinutes,
     },
   });
 
@@ -100,8 +98,8 @@ export interface SessionTimes {
  * not-yet-opened session with no cascade/bulk-update needed.
  */
 export function computeSessionTimes(
-  session: Pick<Session, "date" | "scheduledStartTime" | "estimatedDuration">,
-  series: Pick<Series, "sessionStartMinutesOfDay" | "sessionDurationMinutes">,
+  session: Pick<Session, "date" | "scheduledStartTime" | "estimatedDuration" | "lateRegWindowMinutes">,
+  series: Pick<Series, "sessionStartMinutesOfDay" | "sessionDurationMinutes" | "lateRegWindowMinutes">,
 ): SessionTimes {
   const snapshotted = session.scheduledStartTime !== null;
   const scheduledStartAt = snapshotted
@@ -110,10 +108,12 @@ export function computeSessionTimes(
       ? londonDateAndMinutesToUtc(session.date, series.sessionStartMinutesOfDay)
       : null;
   const durationMinutes = snapshotted ? session.estimatedDuration : series.sessionDurationMinutes;
+  const lateRegWindowMinutes = snapshotted ? session.lateRegWindowMinutes : series.lateRegWindowMinutes;
 
-  const lateRegClosesAt = scheduledStartAt
-    ? new Date(scheduledStartAt.getTime() + TOURNAMENT_LATE_REG_WINDOW_MINUTES * 60_000)
-    : null;
+  const lateRegClosesAt =
+    scheduledStartAt && lateRegWindowMinutes != null
+      ? new Date(scheduledStartAt.getTime() + lateRegWindowMinutes * 60_000)
+      : null;
   const estimatedEndAt =
     scheduledStartAt && durationMinutes != null
       ? new Date(scheduledStartAt.getTime() + durationMinutes * 60_000)

@@ -31,30 +31,41 @@ export function CountdownRing({
 
   const fraction = totalMs > 0 ? Math.max(0, Math.min(1, remaining / totalMs)) : 0;
   const totalSeconds = Math.ceil(remaining / 1000);
-  const radius = (size - 4) / 2;
+  const strokeWidth = Math.max(2.5, size / 28);
+  const radius = (size - strokeWidth * 2) / 2;
   const circumference = 2 * Math.PI * radius;
   const urgent = fraction <= 0.15;
   const low = fraction <= 0.4;
   const colour = urgent ? "#FF2D40" : low ? "#D8B05A" : "#8B93A1";
   const label = formatRemaining(totalSeconds, formatMode);
+  const fontSize = Math.round(size / 5);
 
   return (
-    <span className="inline-flex items-center gap-1.5" aria-label={`${label} remaining`}>
+    <span
+      className="relative inline-flex items-center justify-center"
+      style={{ width: size, height: size }}
+      aria-label={`${label} remaining`}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#343B44" strokeWidth="2.5" />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#343B44" strokeWidth={strokeWidth} />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
           stroke={colour}
-          strokeWidth="2.5"
+          strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - fraction)}
           strokeLinecap="round"
         />
       </svg>
-      <span className={`tnum font-display text-sm ${urgent ? "text-ember" : "text-text"}`}>{label}</span>
+      <span
+        className={`tnum absolute font-display ${urgent ? "text-ember" : "text-text"}`}
+        style={{ fontSize }}
+      >
+        {label}
+      </span>
     </span>
   );
 }

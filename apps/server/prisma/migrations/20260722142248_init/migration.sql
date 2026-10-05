@@ -119,6 +119,7 @@ CREATE TABLE "series" (
     "isActive" BOOLEAN NOT NULL DEFAULT false,
     "sessionStartMinutesOfDay" INTEGER,
     "sessionDurationMinutes" INTEGER,
+    "lateRegWindowMinutes" INTEGER,
     "expectedPlayerCount" INTEGER,
 
     CONSTRAINT "series_pkey" PRIMARY KEY ("id")
@@ -133,6 +134,7 @@ CREATE TABLE "session" (
     "scheduledStartTime" TIMESTAMP(3),
     "actualStartTime" TIMESTAMP(3),
     "estimatedDuration" DOUBLE PRECISION,
+    "lateRegWindowMinutes" INTEGER,
     "expectedPlayerCount" INTEGER,
     "status" "SessionStatus" NOT NULL DEFAULT 'CREATED',
     "format" "TournamentFormat" NOT NULL DEFAULT 'REGULAR',

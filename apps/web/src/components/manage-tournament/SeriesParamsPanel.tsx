@@ -7,6 +7,7 @@ interface SeriesDetail {
   status: "ACTIVE" | "ARCHIVED";
   sessionStartMinutesOfDay: number | null;
   sessionDurationMinutes: number | null;
+  lateRegWindowMinutes: number | null;
 }
 
 function minutesOfDayToTime(minutes: number): string {
@@ -26,26 +27,33 @@ function timeToMinutesOfDay(time: string): number | null {
 
 export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
   const [detail, setDetail] = useState<SeriesDetail | null>(null);
+  const [nameInput, setNameInput] = useState("");
   const [startTime, setStartTime] = useState("17:00");
   const [durationHours, setDurationHours] = useState("0");
   const [durationMinutes, setDurationMinutes] = useState("0");
+  const [lateRegWindowMinutes, setLateRegWindowMinutes] = useState("70");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const load = useCallback(() => {
     void api<SeriesDetail>(`/api/admin/tournament-series/${seriesId}`).then((d) => {
       setDetail(d);
+      setNameInput(d.name);
       if (d.sessionStartMinutesOfDay !== null) setStartTime(minutesOfDayToTime(d.sessionStartMinutesOfDay));
       if (d.sessionDurationMinutes !== null) {
         setDurationHours(String(Math.floor(d.sessionDurationMinutes / 60)));
         setDurationMinutes(String(d.sessionDurationMinutes % 60));
       }
+      if (d.lateRegWindowMinutes !== null) setLateRegWindowMinutes(String(d.lateRegWindowMinutes));
     });
   }, [seriesId]);
   useEffect(load, [load]);
 
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameSaved, setNameSaved] = useState(false);
 
   if (!detail) return null;
 
@@ -58,6 +66,37 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
       .catch((e: Error) => setArchiveError(e.message))
       .finally(() => setArchiveBusy(false));
   };
+
+  const saveName = () => {
+    const trimmed = nameInput.trim();
+    if (trimmed.length === 0) return setNameError("Enter a series name.");
+    setNameBusy(true);
+    setNameError(null);
+    void api(`/api/admin/tournament-series/${seriesId}/params`, {
+      method: "PUT",
+      body: JSON.stringify({ name: trimmed }),
+    })
+      .then(() => {
+        setNameSaved(true);
+        load();
+        setTimeout(() => setNameSaved(false), 2000);
+      })
+      .catch((e: Error) => setNameError(e.message))
+      .finally(() => setNameBusy(false));
+  };
+
+  const nameControl = (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="text-xs text-muted">
+        Series name
+        <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} className={`${inputCls} mt-1 w-full`} />
+      </label>
+      <button className={`${btn} mt-4`} disabled={nameBusy} onClick={saveName}>
+        Save name
+      </button>
+      {nameSaved && <span className="mt-4 text-sm text-text">Saved.</span>}
+    </div>
+  );
 
   const archiveControl = (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -75,7 +114,11 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
       <div className="panel-steel mt-4 rounded-lg p-4 text-sm text-muted">
         {archiveControl}
         {archiveError && <p className="mt-2 text-sm text-ember">{archiveError}</p>}
-        <p className="mt-2">
+        <div className="mt-3 border-t border-line pt-3">
+          {nameControl}
+          {nameError && <p className="mt-2 text-sm text-ember">{nameError}</p>}
+        </div>
+        <p className="mt-3">
           Legacy season — no tournament template. Only series created via "New tournament series"
           have editable start time / duration.
         </p>
@@ -86,15 +129,20 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
   const save = () => {
     const sessionStartMinutesOfDay = timeToMinutesOfDay(startTime);
     const sessionDurationMinutes = Number(durationHours) * 60 + Number(durationMinutes);
+    const lateReg = Number(lateRegWindowMinutes);
     if (sessionStartMinutesOfDay === null) return setError("Enter a valid start time.");
     if (!Number.isInteger(sessionDurationMinutes) || sessionDurationMinutes < 1) {
       return setError("Enter a valid duration.");
+    }
+    if (!Number.isInteger(lateReg) || lateReg < 1) {
+      return setError("Enter a valid late registration window.");
     }
     void api(`/api/admin/tournament-series/${seriesId}/params`, {
       method: "PUT",
       body: JSON.stringify({
         sessionStartMinutesOfDay,
         sessionDurationMinutes,
+        lateRegWindowMinutes: lateReg,
       }),
     })
       .then(() => {
@@ -110,10 +158,14 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
     <div className="panel-steel mt-4 rounded-lg p-4">
       {archiveControl}
       {archiveError && <p className="mt-2 text-sm text-ember">{archiveError}</p>}
-      <p className="mt-2 text-xs text-muted">
+      <div className="mt-3 border-t border-line pt-3">
+        {nameControl}
+        {nameError && <p className="mt-2 text-sm text-ember">{nameError}</p>}
+      </div>
+      <p className="mt-3 text-xs text-muted">
         Applies to every not-yet-opened session in this series immediately on save.
       </p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <label className="text-xs text-muted">
           Session start time
           <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={`${inputCls} mt-1 w-full`} />
@@ -124,6 +176,14 @@ export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
             <input value={durationHours} onChange={(e) => setDurationHours(e.target.value)} className={`${inputCls} w-full`} />
             <input value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} className={`${inputCls} w-full`} />
           </div>
+        </label>
+        <label className="text-xs text-muted">
+          Late registration window (minutes)
+          <input
+            value={lateRegWindowMinutes}
+            onChange={(e) => setLateRegWindowMinutes(e.target.value)}
+            className={`${inputCls} mt-1 w-full`}
+          />
         </label>
       </div>
       {error && <p className="mt-2 text-sm text-ember">{error}</p>}

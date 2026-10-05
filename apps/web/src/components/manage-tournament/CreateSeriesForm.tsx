@@ -29,6 +29,7 @@ export function CreateSeriesForm({
   const [startTime, setStartTime] = useState("17:00");
   const [durationHours, setDurationHours] = useState("4");
   const [durationMinutes, setDurationMinutes] = useState("20");
+  const [lateRegWindowMinutes, setLateRegWindowMinutes] = useState("70");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,12 +38,17 @@ export function CreateSeriesForm({
   const submit = () => {
     const sessionStartMinutesOfDay = timeToMinutesOfDay(startTime);
     const sessionDurationMinutes = Number(durationHours) * 60 + Number(durationMinutes);
+    const lateReg = Number(lateRegWindowMinutes);
     if (sessionStartMinutesOfDay === null) {
       setError("Enter a valid start time.");
       return;
     }
     if (!Number.isInteger(sessionDurationMinutes) || sessionDurationMinutes < 1) {
       setError("Enter a valid duration.");
+      return;
+    }
+    if (!Number.isInteger(lateReg) || lateReg < 1) {
+      setError("Enter a valid late registration window.");
       return;
     }
     setBusy(true);
@@ -55,6 +61,7 @@ export function CreateSeriesForm({
         endDate,
         sessionStartMinutesOfDay,
         sessionDurationMinutes,
+        lateRegWindowMinutes: lateReg,
       }),
     })
       .then((res) => onCreated(res.id))
@@ -91,6 +98,14 @@ export function CreateSeriesForm({
         <label className="text-xs text-muted">
           Duration (minutes)
           <input value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} className={`${inputCls} mt-1 w-full`} />
+        </label>
+        <label className="text-xs text-muted">
+          Late registration window (minutes)
+          <input
+            value={lateRegWindowMinutes}
+            onChange={(e) => setLateRegWindowMinutes(e.target.value)}
+            className={`${inputCls} mt-1 w-full`}
+          />
         </label>
       </div>
       <p className="mt-2 text-xs text-muted">
