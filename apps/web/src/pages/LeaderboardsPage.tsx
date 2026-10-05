@@ -7,6 +7,7 @@ interface SeasonInfo {
   name: string;
   isActive: boolean;
   createdAt: string;
+  hasTemplate: boolean;
 }
 
 interface TournamentRow {
@@ -95,17 +96,35 @@ export function LeaderboardsPage() {
     return sorted.map((r, i) => ({ ...r, rank: i + 1 }));
   }, [tournament, search, sortKey, sortDir]);
 
+  // Legacy rolling-generation seasons (no tournament-series template) only
+  // ever carry Thursday cash sessions; explicit tournament-management series
+  // only ever carry Tuesday tournament sessions — each board's picker only
+  // offers the seasons that actually have data for it.
+  const visibleSeasons = useMemo(
+    () => seasons.filter((s) => (tab === "cash" ? !s.hasTemplate : s.hasTemplate)),
+    [seasons, tab],
+  );
+
   useEffect(() => {
     void fetch("/api/seasons")
       .then((r) => r.json())
       .then((list: SeasonInfo[]) => {
         setSeasons(list);
-        const newest = [...list].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-        )[0];
+        const newest = [...list]
+          .filter((s) => s.hasTemplate)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
         if (newest) setSeasonId(newest.id);
       });
   }, []);
+
+  // Switching between the tournament/cash boards can leave the previously
+  // selected season invalid for the new board (it only ever had data for
+  // the other one) — fall back to "all" rather than silently feeding the
+  // other board's id into a fetch that can never return anything for it.
+  useEffect(() => {
+    if (seasonId === "all") return;
+    if (!visibleSeasons.some((s) => s.id === seasonId)) setSeasonId("all");
+  }, [tab, visibleSeasons, seasonId]);
 
   // A "from session / to session" range only has one well-defined meaning
   // within a single series, so it's only offered once one is selected.
@@ -184,7 +203,7 @@ export function LeaderboardsPage() {
             onChange={(e) => setSeasonId(e.target.value)}
             className="ml-auto rounded border border-steel bg-bg-0 px-2 py-1.5 text-sm"
           >
-            {seasons.map((s) => (
+            {visibleSeasons.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
                 {s.isActive ? " (current)" : ""}

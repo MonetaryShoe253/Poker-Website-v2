@@ -50,6 +50,12 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       startsAt: s.startsAt,
       endsAt: s.endsAt,
       createdAt: s.createdAt,
+      // Legacy rolling-generation seasons (no tournament-series template) only
+      // ever carry Thursday cash sessions worth picking by name; explicit
+      // tournament-management series only ever carry Tuesday tournament
+      // sessions — lets the leaderboard show each board only the seasons
+      // that actually have data for it.
+      hasTemplate: s.sessionStartMinutesOfDay !== null,
     }));
   });
 

@@ -25,7 +25,7 @@ export function SocietyPage() {
         <Reveal>
           <SectionTitle kicker="Committee">The people running the room</SectionTitle>
         </Reveal>
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="mt-6 grid grid-cols-2 items-start gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {SOCIETY.committee.map((member, i) => (
             <Reveal key={member.name + member.role} delay={Math.min(i * 0.04, 0.3)}>
               <div className="panel-steel rounded-lg p-4">
