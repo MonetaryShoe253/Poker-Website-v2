@@ -87,11 +87,11 @@ export function BlindLevelDisplay({
       <div
         className={
           large
-            ? "flex flex-col items-center gap-8 lg:flex-row lg:justify-center lg:gap-16"
-            : "flex flex-wrap items-center justify-between gap-4"
+            ? "flex flex-col items-center justify-center gap-8 lg:flex-row lg:gap-16"
+            : "flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-10"
         }
       >
-        <div className={large ? "text-center" : ""}>
+        <div className="text-center">
           <div className="font-display text-xs uppercase tracking-widest text-muted">
             Level {levelNumber}
             {totalLevels ? ` of ${totalLevels}` : ""}
@@ -101,20 +101,20 @@ export function BlindLevelDisplay({
               className={
                 large
                   ? "tnum mt-2 font-display text-9xl text-purple-400"
-                  : "tnum font-display text-3xl text-purple-400"
+                  : "tnum mt-2 font-display text-6xl text-purple-400"
               }
             >
               BREAK
             </div>
           ) : (
             <>
-              <div className={large ? "tnum mt-2 font-display text-9xl" : "tnum font-display text-3xl"}>
+              <div className={large ? "tnum mt-2 font-display text-9xl" : "tnum mt-2 font-display text-6xl"}>
                 {level.smallBlind}/{level.bigBlind}
               </div>
               {level.ante ? (
                 <span
                   className={`mt-2 inline-flex items-baseline gap-1 rounded-full border border-purple-400/40 bg-purple-400/15 font-display uppercase tracking-widest text-purple-300 ${
-                    large ? "px-4 py-1.5 text-lg" : "px-2.5 py-0.5 text-xs"
+                    large ? "px-4 py-1.5 text-lg" : "px-3 py-1 text-sm"
                   }`}
                 >
                   BB Ante <span className="tnum">{level.ante}</span>
@@ -129,13 +129,13 @@ export function BlindLevelDisplay({
             <CountdownRing
               deadlineMs={deadlineMs}
               totalMs={level.durationMinutes * 60_000}
-              size={large ? 280 : 72}
+              size={large ? 280 : 140}
               formatMode="clock"
             />
           )}
           {isPaused && timerStartedAt && timerPausedAt && (
             <>
-              <div className={large ? "tnum font-display text-6xl text-muted" : "tnum font-display text-2xl text-muted"}>
+              <div className={large ? "tnum font-display text-6xl text-muted" : "tnum font-display text-4xl text-muted"}>
                 {formatFrozenRemaining(timerStartedAt, timerPausedAt, level.durationMinutes)}
               </div>
               <div className="font-display text-xs uppercase tracking-widest text-ember">Paused</div>

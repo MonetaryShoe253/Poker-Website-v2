@@ -580,6 +580,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   async function kioskSignInPlayer(
     sessionId: string,
     player: { id: string; displayName: string },
+    currentActivePlayerCount: number | null,
     reply: FastifyReply,
   ): Promise<{ id: string } | null> {
     const existing = await prisma.sessionEntry.findUnique({
@@ -589,8 +590,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       void reply.code(409).send({ error: `${player.displayName} is already signed in.` });
       return null;
     }
-    return existing
-      ? prisma.sessionEntry.update({
+    const entry = existing
+      ? await prisma.sessionEntry.update({
           where: { id: existing.id },
           data: {
             signInTime: new Date(),
@@ -603,7 +604,18 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
             bountyPoints: null,
           },
         })
-      : prisma.sessionEntry.create({ data: { sessionId, playerId: player.id, signInTime: new Date() } });
+      : await prisma.sessionEntry.create({ data: { sessionId, playerId: player.id, signInTime: new Date() } });
+
+    // Mirrors the decrement on sign-out — active players ticks up the moment
+    // someone sits down instead of staying blank until the first sign-out
+    // lazily initialises it.
+    const nextActivePlayerCount =
+      currentActivePlayerCount === null
+        ? await prisma.sessionEntry.count({ where: { sessionId, voidedAt: null, signOutTime: null } })
+        : currentActivePlayerCount + 1;
+    await prisma.session.update({ where: { id: sessionId }, data: { activePlayerCount: nextActivePlayerCount } });
+
+    return entry;
   }
 
   const KioskSigninBody = z.object({ playerId: z.string().min(1) });
@@ -618,7 +630,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!assertKioskSignInOpen(session.status, reply)) return;
     const player = await prisma.player.findUnique({ where: { id: parsed.data.playerId } });
     if (!player) return reply.code(404).send({ error: "No such player." });
-    const entry = await kioskSignInPlayer(id, player, reply);
+    const entry = await kioskSignInPlayer(id, player, session.activePlayerCount, reply);
     if (!entry) return;
     await audit(admin.userId, "kiosk.signin", { sessionId: id, playerId: player.id, displayName: player.displayName });
     return { ok: true, entry: { id: entry.id, displayName: player.displayName } };
@@ -643,7 +655,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       (await prisma.player.create({
         data: { displayName: parsed.data.displayName, email: parsed.data.email },
       }));
-    const entry = await kioskSignInPlayer(id, player, reply);
+    const entry = await kioskSignInPlayer(id, player, session.activePlayerCount, reply);
     if (!entry) return;
     await audit(admin.userId, "kiosk.register", {
       sessionId: id,
