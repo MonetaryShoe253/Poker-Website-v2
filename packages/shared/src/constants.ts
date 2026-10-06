@@ -112,8 +112,13 @@ export const SUBMISSION_WINDOW = { openHour: 17, closeHour: 23, closeMinute: 59 
 /** A finishing position at or better than this counts as "reaching the final table". */
 export const FINAL_TABLE_SIZE = 9;
 
-/** Guaranteed minimum points for any non-DNF tournament finish, even outside the ITM cutoff. */
+/** Guaranteed minimum points for any non-DNF finish that signs out, even
+ * outside the ITM cutoff — just for showing up and playing it out. */
 export const TOURNAMENT_FLOOR_POINTS = 2;
+
+/** Guaranteed minimum points for a non-DNF finish inside the ITM cutoff —
+ * higher than the participation floor since it's a paid finish. */
+export const TOURNAMENT_ITM_FLOOR_POINTS = 6;
 
 /** Only a player's best N sessions count toward their leaderboard points total. */
 export const TOURNAMENT_BEST_SESSIONS_COUNT = 8;

@@ -26,6 +26,45 @@ function parseDateOnly(value: string): { year: number; month: number; day: numbe
   return { year, month, day };
 }
 
+interface TournamentSessionRow {
+  seriesId: string;
+  date: Date;
+  type: "TOURNAMENT";
+  status: "SCHEDULED";
+  code: string;
+  submissionsOpenAt: Date;
+  submissionsCloseAt: Date;
+  blindSchedule: Prisma.InputJsonValue;
+}
+
+/** One session row on the given London calendar day — the same shape every
+ * tournament session gets, whether bulk-generated at series creation or
+ * added one at a time afterward. Time-of-day/duration/late-reg window are
+ * deliberately left unset here: until the session is opened, they're derived
+ * live from the series' current template (see computeSessionTimes), so a
+ * newly added session automatically follows whatever the series' norms are
+ * right now rather than a snapshot frozen at insert time. */
+function buildTournamentSessionRow(seriesId: string, day: Date): TournamentSessionRow {
+  const parts = londonParts(day);
+  return {
+    seriesId,
+    date: day,
+    type: "TOURNAMENT",
+    status: "SCHEDULED",
+    code: generateSessionCode(),
+    submissionsOpenAt: londonToUtc(parts.year, parts.month, parts.day, SUBMISSION_WINDOW.openHour),
+    submissionsCloseAt: londonToUtc(
+      parts.year,
+      parts.month,
+      parts.day,
+      SUBMISSION_WINDOW.closeHour,
+      SUBMISSION_WINDOW.closeMinute,
+      59,
+    ),
+    blindSchedule: FIXED_TOURNAMENT_BLIND_SCHEDULE as unknown as Prisma.InputJsonValue,
+  };
+}
+
 export async function createTournamentSeries(
   input: CreateTournamentSeriesInput,
 ): Promise<{ id: string; sessionCount: number }> {
@@ -47,42 +86,28 @@ export async function createTournamentSeries(
     },
   });
 
-  const rows: Array<{
-    seriesId: string;
-    date: Date;
-    type: "TOURNAMENT";
-    status: "SCHEDULED";
-    code: string;
-    submissionsOpenAt: Date;
-    submissionsCloseAt: Date;
-    blindSchedule: Prisma.InputJsonValue;
-  }> = [];
+  const rows: TournamentSessionRow[] = [];
   for (let day = startsAt; day <= endsAt; day = addLondonDays(day, 1)) {
-    const parts = londonParts(day);
-    if (parts.weekday !== 2) continue; // Tuesday only
-    rows.push({
-      seriesId: series.id,
-      date: day,
-      type: "TOURNAMENT",
-      status: "SCHEDULED",
-      code: generateSessionCode(),
-      submissionsOpenAt: londonToUtc(parts.year, parts.month, parts.day, SUBMISSION_WINDOW.openHour),
-      submissionsCloseAt: londonToUtc(
-        parts.year,
-        parts.month,
-        parts.day,
-        SUBMISSION_WINDOW.closeHour,
-        SUBMISSION_WINDOW.closeMinute,
-        59,
-      ),
-      blindSchedule: FIXED_TOURNAMENT_BLIND_SCHEDULE as unknown as Prisma.InputJsonValue,
-    });
+    if (londonParts(day).weekday !== 2) continue; // Tuesday only
+    rows.push(buildTournamentSessionRow(series.id, day));
   }
   if (rows.length > 0) {
     await prisma.session.createMany({ data: rows });
   }
 
   return { id: series.id, sessionCount: rows.length };
+}
+
+/** Adds a single extra tournament session to an existing series on an
+ * arbitrary date — a one-off makeup session, not bound to the series' usual
+ * weekday. It slots into temporal order for free: every session list sorts
+ * by date fresh on each read, so nothing needs reordering or renumbering. */
+export async function addSessionToSeries(seriesId: string, dateStr: string): Promise<{ id: string; date: Date }> {
+  const { year, month, day } = parseDateOnly(dateStr);
+  const date = londonToUtc(year, month, day);
+  const row = buildTournamentSessionRow(seriesId, date);
+  const session = await prisma.session.create({ data: row });
+  return { id: session.id, date: session.date };
 }
 
 export interface SessionTimes {

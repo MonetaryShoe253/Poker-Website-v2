@@ -1,4 +1,4 @@
-import { TOURNAMENT_FLOOR_POINTS } from "@uos-poker/shared";
+import { TOURNAMENT_FLOOR_POINTS, TOURNAMENT_ITM_FLOOR_POINTS } from "@uos-poker/shared";
 import { prisma } from "../db";
 
 export interface TournamentFormula {
@@ -8,20 +8,25 @@ export interface TournamentFormula {
   BOUNTY_VALUE: number;
 }
 
+/** Positions 1..cutoff are "in the money"; everyone else scores a flat 0. */
+export function tournamentIcmCutoff(entrantCount: number, formula: TournamentFormula): number {
+  return Math.max(1, Math.floor(entrantCount * formula.ITM_PERCENT));
+}
+
 /** floor(A * N * e^(-B*p)) for finishers inside the cutoff, 0 outside it. */
 export function calculateTournamentPoints(
   position: number,
   entrantCount: number,
   formula: TournamentFormula,
 ): number {
-  const icmCutoff = Math.max(1, Math.floor(entrantCount * formula.ITM_PERCENT));
-  if (position > icmCutoff) return 0;
+  if (position > tournamentIcmCutoff(entrantCount, formula)) return 0;
   return Math.floor(formula.A * entrantCount * Math.exp(-formula.B * position));
 }
 
-/** Tops a non-DNF finish up to the guaranteed floor — never applies to a DNF. */
-export function applyFloor(rawPoints: number): number {
-  return Math.max(rawPoints, TOURNAMENT_FLOOR_POINTS);
+/** Tops a finish up to its guaranteed floor — the higher ITM floor inside the
+ * cutoff, the lower participation floor outside it. Never applies to a DNF. */
+export function applyFloor(rawPoints: number, inTheMoney: boolean): number {
+  return Math.max(rawPoints, inTheMoney ? TOURNAMENT_ITM_FLOOR_POINTS : TOURNAMENT_FLOOR_POINTS);
 }
 
 /** 0 for a lone clean week; from the second week on, the bonus equals the

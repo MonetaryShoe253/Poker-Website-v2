@@ -7,7 +7,12 @@ import { isProd } from "./env";
 import { adjustBankroll, hydrateBankroll } from "./realtime/users";
 import type { BlindLevel } from "./routes-admin";
 import { ensureActiveSeason, generateSessionCode } from "./services/seasons";
-import { applyFloor, calculateTournamentPoints, getTournamentFormula } from "./services/tournament";
+import {
+  applyFloor,
+  calculateTournamentPoints,
+  getTournamentFormula,
+  tournamentIcmCutoff,
+} from "./services/tournament";
 import { addLondonDays, londonMidnight, londonParts, londonToUtc } from "./time";
 
 /** Resolve the verified user for a request, or null. */
@@ -453,10 +458,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       entrantCount = count;
       if (count > 0) {
         const formula = await getTournamentFormula();
-        const icmCutoff = Math.max(1, Math.floor(count * formula.ITM_PERCENT));
+        const icmCutoff = tournamentIcmCutoff(count, formula);
         pointsStructure = Array.from({ length: icmCutoff }, (_, i) => {
           const position = i + 1;
-          return { position, points: applyFloor(calculateTournamentPoints(position, count, formula)) };
+          return { position, points: applyFloor(calculateTournamentPoints(position, count, formula), true) };
         });
       }
     }

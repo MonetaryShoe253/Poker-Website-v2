@@ -172,32 +172,32 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
         )}
         {error && <p className="mt-2 text-center text-xs text-ember">{error}</p>}
 
-        <div className={isFullscreen ? "mt-6 text-center" : "mt-3 text-center"}>
-          <span className="font-display text-xs uppercase tracking-widest text-muted">Active players </span>
-          <span className={isFullscreen ? "tnum font-display text-xl text-muted" : "tnum font-display text-sm text-muted"}>
+        <div className={isFullscreen ? "mt-5 text-center" : "mt-2 text-center"}>
+          <span className="font-display text-[10px] uppercase tracking-widest text-muted">Active players </span>
+          <span className={isFullscreen ? "tnum font-display text-base text-muted" : "tnum font-display text-xs text-muted"}>
             {info.activePlayerCount ?? "—"}
           </span>
         </div>
       </div>
 
-      <div className={isFullscreen ? "mx-auto mt-4 max-w-4xl" : "mx-auto mt-3 max-w-2xl"}>
+      <div className={isFullscreen ? "mx-auto mt-4 max-w-3xl" : "mx-auto mt-3 max-w-xl"}>
         {info.pointsStructure && info.pointsStructure.length > 0 && (
-          <div className={isFullscreen ? "panel-steel rounded-lg p-5 opacity-90" : "panel-steel rounded-lg p-3 opacity-90"}>
-            <div className="font-display text-[10px] uppercase tracking-widest text-muted">
+          <div className={isFullscreen ? "panel-steel rounded-lg p-3 opacity-80" : "panel-steel rounded-lg p-2 opacity-80"}>
+            <div className="font-display text-[9px] uppercase tracking-widest text-muted">
               Points structure · {info.entrantCount} {info.entrantCount === 1 ? "entrant" : "entrants"}
             </div>
-            <div className={isFullscreen ? "mt-3 flex flex-wrap justify-center gap-2" : "mt-2 flex flex-wrap justify-center gap-1.5"}>
+            <div className={isFullscreen ? "mt-2 flex flex-wrap justify-center gap-1.5" : "mt-1.5 flex flex-wrap justify-center gap-1"}>
               {info.pointsStructure.map((row) => (
                 <div
                   key={row.position}
                   className={
                     isFullscreen
-                      ? "rounded border border-steel px-3 py-1.5 text-center"
-                      : "rounded border border-steel px-2 py-1 text-center text-xs"
+                      ? "rounded border border-steel px-2 py-1 text-center"
+                      : "rounded border border-steel px-1.5 py-0.5 text-center"
                   }
                 >
-                  <div className="tnum font-display text-[10px] text-muted">#{row.position}</div>
-                  <div className={isFullscreen ? "tnum font-display text-sm" : "tnum font-display text-xs"}>
+                  <div className="tnum font-display text-[9px] text-muted">#{row.position}</div>
+                  <div className={isFullscreen ? "tnum font-display text-xs" : "tnum font-display text-[10px]"}>
                     {row.points} pts
                   </div>
                 </div>
@@ -206,11 +206,11 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
           </div>
         )}
 
-        <div className={isFullscreen ? "mt-3 grid gap-3 opacity-90 lg:grid-cols-2" : "mt-3 grid gap-3 opacity-90 lg:grid-cols-2"}>
+        <div className={isFullscreen ? "mt-3 grid gap-3 opacity-80 lg:grid-cols-2" : "mt-3 grid gap-3 opacity-80 lg:grid-cols-2"}>
           <div className="panel-steel rounded-lg p-3">
-            <div className="font-display text-[10px] uppercase tracking-widest text-muted">Sign-out leaderboard</div>
+            <div className="font-display text-[10px] uppercase tracking-widest text-muted">Sign-out leaderboard (last 3)</div>
             <ul className="mt-1.5 space-y-1 text-xs">
-              {signedOutRanked.map((e) => (
+              {signedOutRanked.slice(0, 3).map((e) => (
                 <li key={e.id} className="flex justify-between border-b border-line/40 py-0.5">
                   <span>{e.nickname}</span>
                   <span className="tnum text-muted">{e.dnf ? "DNF" : `#${e.finishingPosition}`}</span>

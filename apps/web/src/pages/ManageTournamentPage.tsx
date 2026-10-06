@@ -41,6 +41,9 @@ export function ManageTournamentPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showDeleteSeries, setShowDeleteSeries] = useState(false);
+  const [showAddSession, setShowAddSession] = useState(false);
+  const [addSessionDate, setAddSessionDate] = useState("");
+  const [addSessionBusy, setAddSessionBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const resolveFromHash = useCallback((list: Series[]) => {
@@ -113,6 +116,23 @@ export function ManageTournamentPage() {
         loadSeries();
       })
       .catch((e: Error) => setError(e.message));
+  };
+
+  const addSession = () => {
+    if (!selectedSeriesId || !addSessionDate) return;
+    setAddSessionBusy(true);
+    void api(`/api/admin/series/${selectedSeriesId}/sessions`, {
+      method: "POST",
+      body: JSON.stringify({ date: addSessionDate }),
+    })
+      .then(() => {
+        setShowAddSession(false);
+        setAddSessionDate("");
+        setError(null);
+        loadSessions();
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setAddSessionBusy(false));
   };
 
   const handleSeriesChange = (id: string) => {
@@ -200,6 +220,34 @@ export function ManageTournamentPage() {
           {!showCreateForm && <TournamentFormulaPanel />}
 
           {selectedSeriesId && !showCreateForm && <SeriesParamsPanel seriesId={selectedSeriesId} />}
+
+          {selectedSeriesId && !showCreateForm && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button className={btn} onClick={() => setShowAddSession((v) => !v)}>
+                {showAddSession ? "Cancel" : "+ Add session"}
+              </button>
+              {showAddSession && (
+                <>
+                  <input
+                    type="date"
+                    value={addSessionDate}
+                    onChange={(e) => setAddSessionDate(e.target.value)}
+                    className={inputCls}
+                  />
+                  <button
+                    className={btn}
+                    disabled={!addSessionDate || addSessionBusy}
+                    onClick={addSession}
+                  >
+                    Add
+                  </button>
+                  <span className="text-xs text-muted">
+                    Follows this series' current start time, duration, and late-reg window.
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="mt-4 space-y-2">
             {sessions === null && <p className="text-muted">Loading sessions…</p>}

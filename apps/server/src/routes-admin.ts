@@ -20,8 +20,9 @@ import {
   ensureFormulaConfigSeed,
   getTournamentFormula,
   streakBonusForWeeks,
+  tournamentIcmCutoff,
 } from "./services/tournament";
-import { computeSessionTimes, createTournamentSeries } from "./services/tournamentSeries";
+import { addSessionToSeries, computeSessionTimes, createTournamentSeries } from "./services/tournamentSeries";
 import { londonDateAndMinutesToUtc, londonToUtc } from "./time";
 
 /**
@@ -264,6 +265,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const session = await prisma.session.findUniqueOrThrow({ where: { id: sessionId }, select: { format: true } });
     const entrantCount = await prisma.sessionEntry.count({ where: { sessionId, voidedAt: null } });
     const formula = await getTournamentFormula();
+    const icmCutoff = tournamentIcmCutoff(entrantCount, formula);
     const entries = await prisma.sessionEntry.findMany({ where: { sessionId, voidedAt: null } });
 
     for (const entry of entries) {
@@ -289,7 +291,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         });
       } else {
         const basePoints = calculateTournamentPoints(entry.finishingPosition, entrantCount, formula);
-        const floored = applyFloor(basePoints);
+        const floored = applyFloor(basePoints, entry.finishingPosition <= icmCutoff);
         await prisma.sessionEntry.update({
           where: { id: entry.id },
           data: {
@@ -459,6 +461,27 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }));
   });
 
+  const AddSessionBody = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+  app.post("/api/admin/series/:seriesId/sessions", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { seriesId } = req.params as { seriesId: string };
+    const parsed = AddSessionBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad date." });
+    const series = await prisma.series.findUnique({ where: { id: seriesId } });
+    if (!series) return reply.code(404).send({ error: "No such series." });
+    try {
+      const session = await addSessionToSeries(seriesId, parsed.data.date);
+      await audit(admin.userId, "tournamentSeries.session.add", { seriesId, sessionId: session.id, date: parsed.data.date });
+      return { ok: true, id: session.id };
+    } catch (err) {
+      if ((err as { code?: string }).code === "P2002") {
+        return reply.code(409).send({ error: "A session already exists on that date." });
+      }
+      throw err;
+    }
+  });
+
   app.get("/api/admin/sessions/:id", async (req, reply) => {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
@@ -559,7 +582,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (query.length < 2) return [];
     const [players, existingEntries] = await Promise.all([
       prisma.player.findMany({
-        where: { displayName: { contains: query, mode: "insensitive" } },
+        where: {
+          OR: [
+            { displayName: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+          ],
+        },
         orderBy: { displayName: "asc" },
         take: 20,
       }),
@@ -676,7 +704,16 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         sessionId: id,
         voidedAt: null,
         signOutTime: null,
-        ...(query ? { player: { displayName: { contains: query, mode: "insensitive" } } } : {}),
+        ...(query
+          ? {
+              player: {
+                OR: [
+                  { displayName: { contains: query, mode: "insensitive" } },
+                  { email: { contains: query, mode: "insensitive" } },
+                ],
+              },
+            }
+          : {}),
       },
       include: { player: true },
       orderBy: { signInTime: "asc" },

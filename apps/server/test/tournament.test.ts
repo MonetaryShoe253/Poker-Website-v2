@@ -23,13 +23,17 @@ describe("tournament formula", () => {
 });
 
 describe("floor points", () => {
-  it("tops up a below-floor finish to the guaranteed minimum", () => {
-    expect(applyFloor(0)).toBe(2);
-    expect(applyFloor(1)).toBe(2);
+  it("tops an in-the-money finish up to the guaranteed minimum", () => {
+    expect(applyFloor(0, true)).toBe(6);
+    expect(applyFloor(1, true)).toBe(6);
   });
 
   it("never lowers a finish that already clears the floor", () => {
-    expect(applyFloor(60)).toBe(60);
+    expect(applyFloor(60, true)).toBe(60);
+  });
+
+  it("tops an out-of-the-money finish up to the lower participation floor", () => {
+    expect(applyFloor(0, false)).toBe(2);
   });
 });
 
