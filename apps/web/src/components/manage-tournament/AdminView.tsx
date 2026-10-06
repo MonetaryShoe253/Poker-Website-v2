@@ -284,12 +284,43 @@ export function AdminView({
               Resume
             </button>
           )}
-          {detail.timerStartedAt && (
-            <button className={btn} onClick={() => run(`/api/admin/sessions/${sessionId}/timer/advance`, "POST")}>
-              Advance level
-            </button>
-          )}
         </div>
+
+        {detail.timerStartedAt && (
+          <div className="mt-4">
+            <div className="font-display text-xs uppercase tracking-widest text-muted">Level controls</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                disabled={detail.currentBlindLevel <= 0}
+                className={btn}
+                onClick={() =>
+                  run(`/api/admin/sessions/${sessionId}/timer/advance`, "POST", {
+                    level: detail.currentBlindLevel - 1,
+                  })
+                }
+              >
+                ◀ Previous level
+              </button>
+              <button className={btn} onClick={() => run(`/api/admin/sessions/${sessionId}/timer/nudge`, "POST", { seconds: -30 })}>
+                ⏪ −30s
+              </button>
+              <button className={btn} onClick={() => run(`/api/admin/sessions/${sessionId}/timer/nudge`, "POST", { seconds: 30 })}>
+                +30s ⏩
+              </button>
+              <button
+                disabled={detail.currentBlindLevel >= levels.length - 1}
+                className={btn}
+                onClick={() =>
+                  run(`/api/admin/sessions/${sessionId}/timer/advance`, "POST", {
+                    level: detail.currentBlindLevel + 1,
+                  })
+                }
+              >
+                Next level ▶
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="panel-steel rounded-lg p-4">

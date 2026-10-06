@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { api, btn } from "../../lib/adminShared";
 import { useFullscreen } from "../../lib/useFullscreen";
 import { BlindLevelDisplay } from "./BlindLevelDisplay";
 
@@ -35,8 +36,15 @@ const POLL_MS = 7_000;
 export function TournamentInfoView({ sessionId }: { sessionId: string }) {
   const [info, setInfo] = useState<TournamentInfo | null>(null);
   const [entries, setEntries] = useState<EntryRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isFullscreen, toggle } = useFullscreen(containerRef);
+
+  const loadInfo = useCallback(() => {
+    void fetch(`/api/sessions/${sessionId}/tournament-info`)
+      .then((r) => r.json() as Promise<TournamentInfo>)
+      .then(setInfo);
+  }, [sessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +71,25 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
   if (!info) return <p className="text-muted">Loading…</p>;
 
   const level = info.blindSchedule?.[info.currentBlindLevel] ?? null;
+  const totalLevels = info.blindSchedule?.length ?? 0;
+  const timerRunning = Boolean(info.timerStartedAt);
+  const canGoPrevious = info.currentBlindLevel > 0;
+  const canGoNext = info.currentBlindLevel < totalLevels - 1;
+
+  const run = (path: string, body?: unknown) => {
+    void api(path, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) })
+      .then(() => {
+        setError(null);
+        loadInfo();
+      })
+      .catch((e: Error) => setError(e.message));
+  };
+
+  const previousLevel = () =>
+    run(`/api/admin/sessions/${sessionId}/timer/advance`, { level: info.currentBlindLevel - 1 });
+  const nextLevel = () =>
+    run(`/api/admin/sessions/${sessionId}/timer/advance`, { level: info.currentBlindLevel + 1 });
+  const nudge = (seconds: number) => run(`/api/admin/sessions/${sessionId}/timer/nudge`, { seconds });
   const signedOutRanked = [...(entries ?? [])]
     .filter((e) => e.signedOut)
     .sort((a, b) => (a.finishingPosition ?? 999_999) - (b.finishingPosition ?? 999_999));
@@ -94,6 +121,41 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
             size={isFullscreen ? "large" : "normal"}
           />
         </div>
+
+        {totalLevels > 0 && (
+          <div className={isFullscreen ? "mt-8 flex flex-wrap justify-center gap-3" : "mt-4 flex flex-wrap justify-center gap-2"}>
+            <button
+              disabled={!canGoPrevious}
+              onClick={previousLevel}
+              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
+            >
+              ◀ Previous level
+            </button>
+            <button
+              disabled={!timerRunning}
+              onClick={() => nudge(-30)}
+              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
+            >
+              ⏪ −30s
+            </button>
+            <button
+              disabled={!timerRunning}
+              onClick={() => nudge(30)}
+              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
+            >
+              +30s ⏩
+            </button>
+            <button
+              disabled={!canGoNext}
+              onClick={nextLevel}
+              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
+            >
+              Next level ▶
+            </button>
+          </div>
+        )}
+        {error && <p className="mt-2 text-center text-xs text-ember">{error}</p>}
+
         <div className={isFullscreen ? "mt-8 text-center" : "mt-4"}>
           <div className="font-display text-xs uppercase tracking-widest text-muted">Active players</div>
           <div className={isFullscreen ? "tnum font-display text-4xl" : "tnum font-display text-xl"}>

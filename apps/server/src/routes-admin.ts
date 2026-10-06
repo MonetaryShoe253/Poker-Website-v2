@@ -877,7 +877,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    const parsed = z.object({ level: z.number().int().min(0).optional() }).safeParse(req.body ?? {});
+    const parsed = z.object({ level: z.number().int().optional() }).safeParse(req.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: "Bad level." });
     const session = await prisma.session.findUnique({ where: { id } });
     if (!session) return reply.code(404).send({ error: "No such session." });
@@ -886,9 +886,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: "Set a blind schedule first." });
     }
     const target = parsed.data.level ?? session.currentBlindLevel + 1;
-    if (target < 0 || target >= schedule.length) {
-      return reply.code(400).send({ error: "Already at the final level." });
-    }
+    if (target < 0) return reply.code(400).send({ error: "Already at the first level." });
+    if (target >= schedule.length) return reply.code(400).send({ error: "Already at the final level." });
     const updated = await prisma.session.update({
       where: { id },
       data: { currentBlindLevel: target, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false },
@@ -899,6 +898,39 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       toLevel: target,
     });
     return { ok: true, currentBlindLevel: updated.currentBlindLevel, timerStartedAt: updated.timerStartedAt };
+  });
+
+  /** Nudges the clock within the current level without changing levels —
+   * positive seconds "fast-forwards" (less time remaining), negative
+   * "rewinds" (more time remaining). Works whether running or paused:
+   * elapsed time is measured from timerPausedAt when paused, else now, and
+   * clamped to [0, level duration] so a nudge can never push the level
+   * negative-remaining or past its own full length. */
+  app.post("/api/admin/sessions/:id/timer/nudge", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = z.object({ seconds: z.number().int() }).safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Bad nudge amount." });
+    const session = await prisma.session.findUnique({ where: { id } });
+    if (!session) return reply.code(404).send({ error: "No such session." });
+    if (!session.timerStartedAt) return reply.code(409).send({ error: "Timer isn't running." });
+    const schedule = session.blindSchedule as BlindLevel[] | null;
+    const currentLevel = schedule?.[session.currentBlindLevel];
+    if (!currentLevel) return reply.code(400).send({ error: "No current blind level." });
+
+    const reference = session.isPaused && session.timerPausedAt ? session.timerPausedAt.getTime() : Date.now();
+    const durationMs = currentLevel.durationMinutes * 60_000;
+    const elapsedMs = reference - session.timerStartedAt.getTime();
+    const nudgedElapsedMs = Math.max(0, Math.min(durationMs, elapsedMs + parsed.data.seconds * 1000));
+    const newTimerStartedAt = new Date(reference - nudgedElapsedMs);
+
+    const updated = await prisma.session.update({
+      where: { id },
+      data: { timerStartedAt: newTimerStartedAt },
+    });
+    await audit(admin.userId, "session.timer.nudge", { sessionId: id, seconds: parsed.data.seconds });
+    return { ok: true, timerStartedAt: updated.timerStartedAt };
   });
 
   const PointsEditBody = z.object({
