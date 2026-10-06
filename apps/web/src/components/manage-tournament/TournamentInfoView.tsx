@@ -11,6 +11,11 @@ interface BlindLevel {
   durationMinutes: number;
 }
 
+interface PointsStructureRow {
+  position: number;
+  points: number;
+}
+
 interface TournamentInfo {
   status: string | null;
   activePlayerCount: number | null;
@@ -19,6 +24,8 @@ interface TournamentInfo {
   timerStartedAt: string | null;
   timerPausedAt: string | null;
   isPaused: boolean;
+  entrantCount: number | null;
+  pointsStructure: PointsStructureRow[] | null;
 }
 
 interface EntryRow {
@@ -172,6 +179,31 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
           </div>
         </div>
       </div>
+
+      {info.pointsStructure && info.pointsStructure.length > 0 && (
+        <div className={isFullscreen ? "mt-6 panel-steel rounded-lg p-10 ring-1 ring-ember/25" : "mt-4 panel-steel rounded-lg p-4"}>
+          <div className="font-display text-xs uppercase tracking-widest text-muted">
+            Points structure · {info.entrantCount} {info.entrantCount === 1 ? "entrant" : "entrants"}
+          </div>
+          <div className={isFullscreen ? "mt-6 flex flex-wrap justify-center gap-4" : "mt-2 flex flex-wrap gap-2"}>
+            {info.pointsStructure.map((row) => (
+              <div
+                key={row.position}
+                className={
+                  isFullscreen
+                    ? "rounded-lg border border-steel px-5 py-3 text-center"
+                    : "rounded border border-steel px-3 py-1.5 text-center text-sm"
+                }
+              >
+                <div className="tnum font-display text-muted">#{row.position}</div>
+                <div className={isFullscreen ? "tnum font-display text-2xl text-ember" : "tnum font-display text-base"}>
+                  {row.points} pts
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={isFullscreen ? "mt-6 grid gap-3 lg:grid-cols-2" : "mt-4 grid gap-4 lg:grid-cols-2"}>
         <div className="panel-steel rounded-lg p-4">

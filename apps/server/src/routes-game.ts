@@ -7,7 +7,7 @@ import { isProd } from "./env";
 import { adjustBankroll, hydrateBankroll } from "./realtime/users";
 import type { BlindLevel } from "./routes-admin";
 import { ensureActiveSeason, generateSessionCode } from "./services/seasons";
-import { calculateTournamentPoints, getTournamentFormula } from "./services/tournament";
+import { applyFloor, calculateTournamentPoints, getTournamentFormula } from "./services/tournament";
 import { addLondonDays, londonMidnight, londonParts, londonToUtc } from "./time";
 
 /** Resolve the verified user for a request, or null. */
@@ -440,6 +440,27 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const session = await prisma.session.findUnique({ where: { id } });
     if (!session) return { status: null };
+
+    // The points structure (what each finishing position is worth) only
+    // means something once late registration has closed — sign-ins stop
+    // then, so the entrant count, and every position's payout with it, is
+    // locked in. Showing it earlier would be misleading while it still fills.
+    let entrantCount: number | null = null;
+    let pointsStructure: Array<{ position: number; points: number }> | null = null;
+    const lateRegClosed = session.status !== "CREATED" && session.status !== "SCHEDULED" && session.status !== "OPEN";
+    if (session.type === "TOURNAMENT" && lateRegClosed) {
+      const count = await prisma.sessionEntry.count({ where: { sessionId: id, voidedAt: null } });
+      entrantCount = count;
+      if (count > 0) {
+        const formula = await getTournamentFormula();
+        const icmCutoff = Math.max(1, Math.floor(count * formula.ITM_PERCENT));
+        pointsStructure = Array.from({ length: icmCutoff }, (_, i) => {
+          const position = i + 1;
+          return { position, points: applyFloor(calculateTournamentPoints(position, count, formula)) };
+        });
+      }
+    }
+
     return {
       status: session.status,
       activePlayerCount: session.activePlayerCount,
@@ -448,6 +469,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       timerStartedAt: session.timerStartedAt,
       timerPausedAt: session.timerPausedAt,
       isPaused: session.isPaused,
+      entrantCount,
+      pointsStructure,
     };
   });
 
