@@ -19,18 +19,18 @@ interface TeaserRow {
   net?: number;
 }
 
-function Countdown({ to }: { to: Date }) {
+function Countdown({ to, type }: { to: Date; type: "TOURNAMENT" | "CASH" }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const start = to.getTime() + 17 * 3_600_000; // sessions start 17:00
+  const start = to.getTime() + 18 * 3_600_000; // both nights start 18:00
   const ms = Math.max(0, start - now);
   if (ms === 0) {
     return (
       <p className="font-display text-xl tracking-[0.18em] text-ember">
-        ON RIGHT NOW · 'TIL 20:00
+        ON RIGHT NOW · 'TIL {type === "TOURNAMENT" ? SOCIETY.tuesdayTime.split("–")[1] : SOCIETY.thursdayTime.split("–")[1]}
       </p>
     );
   }
@@ -165,7 +165,7 @@ export function HomePage() {
                   month: "long",
                 })}
               </p>
-              <Countdown to={new Date(next.date)} />
+              <Countdown to={new Date(next.date)} type={next.type} />
             </motion.div>
           )}
 

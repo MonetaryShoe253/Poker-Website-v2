@@ -13,7 +13,7 @@ interface UpcomingSession {
 export function SessionsPage() {
   usePageMeta(
     "Sessions",
-    "Tuesday tournaments and Thursday cash games, 18:00–21:30: what to expect at your first UOS Poker session.",
+    "Tuesday tournaments (18:00–21:30) and Thursday cash games (18:00–20:00): what to expect at your first UOS Poker session.",
   );
   const [upcoming, setUpcoming] = useState<UpcomingSession[]>([]);
   useEffect(() => {
@@ -37,7 +37,7 @@ export function SessionsPage() {
         <Reveal>
           <article className="panel-steel h-full rounded-lg p-6">
             <p className="font-display text-xs uppercase tracking-[0.3em] text-ember">
-              Tuesday · 18:00–21:30
+              Tuesday · {SOCIETY.tuesdayTime}
             </p>
             <h2 className="mt-2 font-display text-2xl font-semibold">The Tournament</h2>
             <dl className="mt-4 space-y-3 text-sm">
@@ -72,7 +72,7 @@ export function SessionsPage() {
         <Reveal delay={0.1}>
           <article className="panel-steel h-full rounded-lg p-6">
             <p className="font-display text-xs uppercase tracking-[0.3em] text-ember">
-              Thursday · 18:00–21:30
+              Thursday · {SOCIETY.thursdayTime}
             </p>
             <h2 className="mt-2 font-display text-2xl font-semibold">The Cash Game</h2>
             <dl className="mt-4 space-y-3 text-sm">
@@ -80,7 +80,7 @@ export function SessionsPage() {
                 <dt className="font-display text-muted">Format</dt>
                 <dd className="text-text">
                   Ring-game Hold'em with play-money chips. Buy in for a stack, top up if it
-                  goes badly, rack up when you leave. Come for twenty minutes or all three
+                  goes badly, rack up when you leave. Come for twenty minutes or all two
                   hours.
                 </dd>
               </div>

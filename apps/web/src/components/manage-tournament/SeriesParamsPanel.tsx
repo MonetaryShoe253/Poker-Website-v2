@@ -28,7 +28,7 @@ function timeToMinutesOfDay(time: string): number | null {
 export function SeriesParamsPanel({ seriesId }: { seriesId: string }) {
   const [detail, setDetail] = useState<SeriesDetail | null>(null);
   const [nameInput, setNameInput] = useState("");
-  const [startTime, setStartTime] = useState("17:00");
+  const [startTime, setStartTime] = useState("18:00");
   const [durationHours, setDurationHours] = useState("0");
   const [durationMinutes, setDurationMinutes] = useState("0");
   const [lateRegWindowMinutes, setLateRegWindowMinutes] = useState("70");

@@ -16,7 +16,7 @@ export function WelcomeEmail({
       <Text style={bodyText}>
         Welcome to UOS Poker. Two ways to play: in person on campus (
         <strong style={{ color: palette.text }}>
-          {nextSession ?? "Tuesday tournaments & Thursday cash games, 17:00–20:00"}
+          {nextSession ?? "Tuesday tournaments 18:00–21:30 & Thursday cash games 18:00–20:00"}
         </strong>
         ) and online, any hour the mood strikes.
       </Text>

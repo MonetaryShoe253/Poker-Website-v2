@@ -26,9 +26,9 @@ export function CreateSeriesForm({
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [startTime, setStartTime] = useState("17:00");
-  const [durationHours, setDurationHours] = useState("4");
-  const [durationMinutes, setDurationMinutes] = useState("20");
+  const [startTime, setStartTime] = useState("18:00");
+  const [durationHours, setDurationHours] = useState("3");
+  const [durationMinutes, setDurationMinutes] = useState("30");
   const [lateRegWindowMinutes, setLateRegWindowMinutes] = useState("70");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
