@@ -90,6 +90,8 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
   const nextLevel = () =>
     run(`/api/admin/sessions/${sessionId}/timer/advance`, { level: info.currentBlindLevel + 1 });
   const nudge = (seconds: number) => run(`/api/admin/sessions/${sessionId}/timer/nudge`, { seconds });
+  const pauseOrResume = () =>
+    run(`/api/admin/sessions/${sessionId}/timer/${info.isPaused ? "resume" : "pause"}`);
   const signedOutRanked = [...(entries ?? [])]
     .filter((e) => e.signedOut)
     .sort((a, b) => (a.finishingPosition ?? 999_999) - (b.finishingPosition ?? 999_999));
@@ -124,6 +126,13 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
 
         {totalLevels > 0 && (
           <div className={isFullscreen ? "mt-8 flex flex-wrap justify-center gap-3" : "mt-4 flex flex-wrap justify-center gap-2"}>
+            <button
+              disabled={!timerRunning}
+              onClick={pauseOrResume}
+              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
+            >
+              {info.isPaused ? "▶ Resume" : "⏸ Pause"}
+            </button>
             <button
               disabled={!canGoPrevious}
               onClick={previousLevel}
