@@ -15,6 +15,7 @@ interface CurrentEntry {
   entryId: string;
   playerId: string;
   displayName: string;
+  email: string;
   signInTime: string;
 }
 
@@ -313,6 +314,7 @@ function SignOutPanel({
           <p className="font-display text-lg">
             Sign out <span className="text-ember">{pending.displayName}</span>?
           </p>
+          <p className="text-xs text-muted">{pending.email}</p>
           <p className="mt-1 text-xs text-muted">This can't be undone from here — an admin can reverse it later.</p>
           {format === "BOUNTY" && (
             <label className="mt-3 block text-xs text-muted">
@@ -357,8 +359,11 @@ function SignOutPanel({
                 }}
                 className="flex w-full items-center justify-between rounded border border-steel px-4 py-3 text-left hover:border-ember"
               >
-                <span className="font-display">{e.displayName}</span>
-                <span className="text-xs text-muted">
+                <span>
+                  <span className="font-display">{e.displayName}</span>{" "}
+                  <span className="text-xs text-muted">{e.email}</span>
+                </span>
+                <span className="shrink-0 text-xs text-muted">
                   Signed in{" "}
                   {new Date(e.signInTime).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
                 </span>

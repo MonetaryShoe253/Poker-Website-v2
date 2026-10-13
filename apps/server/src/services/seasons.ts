@@ -1,6 +1,7 @@
-import type { Series } from "@prisma/client";
+import type { Prisma, Series, SessionType } from "@prisma/client";
 import {
   DEFAULT_POINTS_SCHEME,
+  FIXED_TOURNAMENT_BLIND_SCHEDULE,
   SESSION_CODE_ALPHABET,
   SESSION_CODE_LENGTH,
   SUBMISSION_WINDOW,
@@ -65,6 +66,13 @@ export async function getRecurrence(): Promise<RecurrenceRule[]> {
   return DEFAULT_RECURRENCE;
 }
 
+/** The blind schedule a new session starts with: every tournament gets the
+ * fixed structure, whichever route creates it (series bulk-create, "Add
+ * session", one-off, rolling recurrence). Cash sessions have none. */
+export function defaultBlindSchedule(type: SessionType): Prisma.InputJsonValue | undefined {
+  return type === "TOURNAMENT" ? (FIXED_TOURNAMENT_BLIND_SCHEDULE as unknown as Prisma.InputJsonValue) : undefined;
+}
+
 /** Create any missing sessions for the next `horizonDays` days. */
 export async function ensureUpcomingSessions(horizonDays = 14): Promise<void> {
   const season = await ensureActiveSeason();
@@ -87,6 +95,7 @@ export async function ensureUpcomingSessions(horizonDays = 14): Promise<void> {
           type: rule.type,
           status: "SCHEDULED",
           code: generateSessionCode(),
+          blindSchedule: defaultBlindSchedule(rule.type),
           submissionsOpenAt: londonToUtc(
             parts.year,
             parts.month,

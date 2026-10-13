@@ -7,7 +7,7 @@ import { isProd } from "./env";
 import { adjustBankroll, hydrateBankroll } from "./realtime/users";
 import type { BlindLevel } from "./routes-admin";
 import { syncBlindClock } from "./services/blindClock";
-import { ensureActiveSeason, generateSessionCode } from "./services/seasons";
+import { defaultBlindSchedule, ensureActiveSeason, generateSessionCode } from "./services/seasons";
 import {
   applyFloor,
   calculateTournamentPoints,
@@ -569,6 +569,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           date: today,
           type: "TOURNAMENT",
           code: generateSessionCode(),
+          blindSchedule: defaultBlindSchedule("TOURNAMENT"),
           submissionsOpenAt: new Date(Date.now() - 3_600_000),
           submissionsCloseAt: londonToUtc(parts.year, parts.month, parts.day, 23, 59, 59),
         },

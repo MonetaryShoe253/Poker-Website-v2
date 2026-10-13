@@ -1,8 +1,8 @@
 import type { Prisma, Series, Session } from "@prisma/client";
-import { FIXED_TOURNAMENT_BLIND_SCHEDULE, SUBMISSION_WINDOW } from "@uos-poker/shared";
+import { SUBMISSION_WINDOW } from "@uos-poker/shared";
 import { prisma } from "../db";
 import { addLondonDays, londonDateAndMinutesToUtc, londonParts, londonToUtc } from "../time";
-import { generateSessionCode } from "./seasons";
+import { defaultBlindSchedule, generateSessionCode } from "./seasons";
 
 /**
  * The explicit tournament-series flow (§ tournament management). Fully
@@ -34,7 +34,7 @@ interface TournamentSessionRow {
   code: string;
   submissionsOpenAt: Date;
   submissionsCloseAt: Date;
-  blindSchedule: Prisma.InputJsonValue;
+  blindSchedule: Prisma.InputJsonValue | undefined;
 }
 
 /** One session row on the given London calendar day — the same shape every
@@ -61,7 +61,7 @@ function buildTournamentSessionRow(seriesId: string, day: Date): TournamentSessi
       SUBMISSION_WINDOW.closeMinute,
       59,
     ),
-    blindSchedule: FIXED_TOURNAMENT_BLIND_SCHEDULE as unknown as Prisma.InputJsonValue,
+    blindSchedule: defaultBlindSchedule("TOURNAMENT"),
   };
 }
 

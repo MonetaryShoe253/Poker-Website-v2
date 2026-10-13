@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { Prisma } from "@prisma/client";
+import { Prisma, type SessionType } from "@prisma/client";
 import { z } from "zod";
 import { DNF_CORRECTION_WINDOW_HOURS, DNF_POSITION_SENTINEL, validateNickname } from "@uos-poker/shared";
 import { sessionFromHeaders } from "./auth";
@@ -7,6 +7,7 @@ import { prisma } from "./db";
 import { getLiveStats } from "./realtime/stats";
 import {
   DEFAULT_RECURRENCE,
+  defaultBlindSchedule,
   ensureActiveSeason,
   ensureUpcomingSessions,
   generateSessionCode,
@@ -69,6 +70,13 @@ export type BlindLevel = {
   durationMinutes: number;
   isBreak?: boolean;
 };
+
+/** The fixed schedule for a tournament session that has none, else null. */
+function missingBlindSchedule(session: { type: SessionType; blindSchedule: Prisma.JsonValue }) {
+  const schedule = session.blindSchedule as BlindLevel[] | null;
+  if (schedule && schedule.length > 0) return null;
+  return defaultBlindSchedule(session.type) ?? null;
+}
 
 async function getSessionCloseTimestamp(sessionId: string): Promise<Date | null> {
   const row = await prisma.auditLog.findFirst({
@@ -177,12 +185,16 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       session.series.sessionStartMinutesOfDay !== null
         ? londonDateAndMinutesToUtc(session.date, session.series.sessionStartMinutesOfDay)
         : null;
-    const schedule = session.blindSchedule as BlindLevel[] | null;
+    // Sessions created before every route set a schedule have none — give a
+    // tournament the fixed structure now rather than opening with no clock.
+    const backfill = missingBlindSchedule(session);
+    const schedule = (backfill ?? session.blindSchedule) as BlindLevel[] | null;
     const shouldAutoStartTimer = Boolean(schedule && schedule.length > 0);
     await prisma.session.update({
       where: { id },
       data: {
         status: "OPEN",
+        ...(backfill ? { blindSchedule: backfill } : {}),
         scheduledStartTime,
         estimatedDuration: session.series.sessionDurationMinutes,
         lateRegWindowMinutes: session.series.lateRegWindowMinutes,
@@ -725,6 +737,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       entryId: e.id,
       playerId: e.playerId,
       displayName: e.player.displayName,
+      email: e.player.email,
       signInTime: e.signInTime,
     }));
   });
@@ -870,13 +883,20 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (session.status !== "OPEN" && session.status !== "LATE_REG_CLOSED") {
       return reply.code(409).send({ error: "Session must be open before starting the timer." });
     }
-    const schedule = session.blindSchedule as BlindLevel[] | null;
+    const backfill = missingBlindSchedule(session);
+    const schedule = (backfill ?? session.blindSchedule) as BlindLevel[] | null;
     if (!schedule || schedule.length === 0) {
       return reply.code(400).send({ error: "Set a blind schedule first." });
     }
     const updated = await prisma.session.update({
       where: { id },
-      data: { currentBlindLevel: 0, timerStartedAt: new Date(), timerPausedAt: null, isPaused: false },
+      data: {
+        ...(backfill ? { blindSchedule: backfill } : {}),
+        currentBlindLevel: 0,
+        timerStartedAt: new Date(),
+        timerPausedAt: null,
+        isPaused: false,
+      },
     });
     await audit(admin.userId, "session.timer.start", { sessionId: id });
     return {
@@ -1234,6 +1254,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         date: londonToUtc(y, m, d),
         type: parsed.data.type,
         code: generateSessionCode(),
+        blindSchedule: defaultBlindSchedule(parsed.data.type),
         submissionsOpenAt: londonToUtc(y, m, d, 17),
         submissionsCloseAt: londonToUtc(y, m, d, 23, 59, 59),
       },
