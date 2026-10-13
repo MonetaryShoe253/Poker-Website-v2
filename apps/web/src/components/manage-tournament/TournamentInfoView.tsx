@@ -102,17 +102,27 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
   const nudge = (seconds: number) => run(`/api/admin/sessions/${sessionId}/timer/nudge`, { seconds });
   const pauseOrResume = () =>
     run(`/api/admin/sessions/${sessionId}/timer/${info.isPaused ? "resume" : "pause"}`);
-  const signedOutRanked = [...(entries ?? [])]
+  // Most recent bust first: the latest player out holds the best (lowest)
+  // finishing position among those already out. DNFs carry a sentinel
+  // position, so they sort to the end on their own.
+  const knockedOut = [...(entries ?? [])]
     .filter((e) => e.signedOut)
     .sort((a, b) => (a.finishingPosition ?? 999_999) - (b.finishingPosition ?? 999_999));
-  const stillPlaying = (entries ?? []).filter((e) => e.signedIn && !e.signedOut);
+  const entrants = (entries ?? []).filter((e) => e.signedIn).length;
+  const playersLeft = info.activePlayerCount ?? (entries ?? []).filter((e) => e.signedIn && !e.signedOut).length;
+  const hasPoints = Boolean(info.pointsStructure && info.pointsStructure.length > 0);
+  const controlBtn = `${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`;
 
   return (
     <div
       ref={containerRef}
-      className={isFullscreen ? "flex min-h-screen flex-col justify-center bg-bg-0 p-8 text-text" : ""}
+      className={
+        isFullscreen
+          ? "flex h-screen flex-col gap-4 overflow-hidden bg-bg-0 p-6 text-text"
+          : "flex flex-col gap-3"
+      }
     >
-      <div className={isFullscreen ? "panel-steel rounded-lg p-10 ring-1 ring-ember/25" : "panel-steel rounded-lg p-6 ring-1 ring-ember/25"}>
+      <div className={isFullscreen ? "panel-steel shrink-0 rounded-lg p-6 ring-1 ring-ember/25" : "panel-steel rounded-lg p-6 ring-1 ring-ember/25"}>
         <div className="flex items-center justify-between">
           <div className="font-display text-xs uppercase tracking-widest text-muted">Blind level</div>
           <button
@@ -135,72 +145,77 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
         </div>
 
         {totalLevels > 0 && (
-          <div className={isFullscreen ? "mt-8 flex flex-wrap justify-center gap-3" : "mt-4 flex flex-wrap justify-center gap-2"}>
-            <button
-              disabled={!timerRunning}
-              onClick={pauseOrResume}
-              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
-            >
+          <div className={isFullscreen ? "mt-4 flex flex-wrap justify-center gap-3" : "mt-4 flex flex-wrap justify-center gap-2"}>
+            <button disabled={!timerRunning} onClick={pauseOrResume} className={controlBtn}>
               {info.isPaused ? "▶ Resume" : "⏸ Pause"}
             </button>
-            <button
-              disabled={!canGoPrevious}
-              onClick={previousLevel}
-              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
-            >
+            <button disabled={!canGoPrevious} onClick={previousLevel} className={controlBtn}>
               ◀ Previous level
             </button>
-            <button
-              disabled={!timerRunning}
-              onClick={() => nudge(-30)}
-              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
-            >
+            <button disabled={!timerRunning} onClick={() => nudge(-30)} className={controlBtn}>
               ⏪ −30s
             </button>
-            <button
-              disabled={!timerRunning}
-              onClick={() => nudge(30)}
-              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
-            >
+            <button disabled={!timerRunning} onClick={() => nudge(30)} className={controlBtn}>
               +30s ⏩
             </button>
-            <button
-              disabled={!canGoNext}
-              onClick={nextLevel}
-              className={`${btn} ${isFullscreen ? "px-5 py-3 text-base" : ""}`}
-            >
+            <button disabled={!canGoNext} onClick={nextLevel} className={controlBtn}>
               Next level ▶
             </button>
           </div>
         )}
         {error && <p className="mt-2 text-center text-xs text-ember">{error}</p>}
-
-        <div className={isFullscreen ? "mt-5 text-center" : "mt-2 text-center"}>
-          <span className="font-display text-[10px] uppercase tracking-widest text-muted">Active players </span>
-          <span className={isFullscreen ? "tnum font-display text-base text-muted" : "tnum font-display text-xs text-muted"}>
-            {info.activePlayerCount ?? "—"}
-          </span>
-        </div>
       </div>
 
-      <div className={isFullscreen ? "mx-auto mt-4 max-w-3xl" : "mx-auto mt-3 max-w-xl"}>
-        {info.pointsStructure && info.pointsStructure.length > 0 && (
-          <div className={isFullscreen ? "panel-steel rounded-lg p-3 opacity-80" : "panel-steel rounded-lg p-2 opacity-80"}>
-            <div className="font-display text-[9px] uppercase tracking-widest text-muted">
+      <div
+        className={`grid gap-3 ${isFullscreen ? "min-h-0 flex-1" : ""} ${
+          hasPoints
+            ? isFullscreen
+              ? "lg:grid-cols-[11rem_minmax(0,1fr)_minmax(0,22rem)]"
+              : "lg:grid-cols-[9rem_minmax(0,1fr)_minmax(0,18rem)]"
+            : isFullscreen
+              ? "lg:grid-cols-[11rem_minmax(0,1fr)]"
+              : "lg:grid-cols-[9rem_minmax(0,1fr)]"
+        }`}
+      >
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1 lg:grid-rows-2">
+          <Stat label="Players left" value={playersLeft} large={isFullscreen} />
+          <Stat label="Entrants" value={entrants} large={isFullscreen} />
+        </div>
+
+        <div className={`panel-steel flex min-h-0 flex-col rounded-lg ${isFullscreen ? "p-4" : "h-56 p-3"}`}>
+          <div className="font-display text-[10px] uppercase tracking-widest text-muted">
+            Knocked out{knockedOut.length > 0 ? ` · ${knockedOut.length}` : ""}
+          </div>
+          {knockedOut.length === 0 ? (
+            <p className="mt-2 text-xs text-muted">Nobody's out yet.</p>
+          ) : (
+            // Fills columns top-to-bottom, newest first; anything past the
+            // panel's edge is clipped, so the list can never push the
+            // display off the screen however many players are out.
+            <ol
+              className={`mt-2 min-h-0 flex-1 overflow-hidden ${isFullscreen ? "text-sm" : "text-xs"}`}
+              style={{ columnWidth: isFullscreen ? "15rem" : "12rem", columnGap: "1.5rem", columnFill: "auto" }}
+            >
+              {knockedOut.map((e) => (
+                <li key={e.id} className="flex break-inside-avoid justify-between gap-2 border-b border-line/40 py-0.5">
+                  <span className="truncate">{e.nickname}</span>
+                  <span className="tnum shrink-0 text-muted">{e.dnf ? "DNF" : `#${e.finishingPosition}`}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+
+        {hasPoints && info.pointsStructure && (
+          <div className={`panel-steel min-h-0 overflow-hidden rounded-lg ${isFullscreen ? "p-4" : "p-3"}`}>
+            <div className="font-display text-[10px] uppercase tracking-widest text-muted">
               Points structure · {info.entrantCount} {info.entrantCount === 1 ? "entrant" : "entrants"}
             </div>
-            <div className={isFullscreen ? "mt-2 flex flex-wrap justify-center gap-1.5" : "mt-1.5 flex flex-wrap justify-center gap-1"}>
+            <div className="mt-2 grid grid-cols-[repeat(auto-fill,minmax(4rem,1fr))] gap-1.5">
               {info.pointsStructure.map((row) => (
-                <div
-                  key={row.position}
-                  className={
-                    isFullscreen
-                      ? "rounded border border-steel px-2 py-1 text-center"
-                      : "rounded border border-steel px-1.5 py-0.5 text-center"
-                  }
-                >
-                  <div className="tnum font-display text-[9px] text-muted">#{row.position}</div>
-                  <div className={isFullscreen ? "tnum font-display text-xs" : "tnum font-display text-[10px]"}>
+                <div key={row.position} className="rounded border border-steel px-1.5 py-1 text-center">
+                  <div className="tnum font-display text-[10px] text-muted">#{row.position}</div>
+                  <div className={isFullscreen ? "tnum font-display text-sm" : "tnum font-display text-xs"}>
                     {row.points} pts
                   </div>
                 </div>
@@ -208,34 +223,16 @@ export function TournamentInfoView({ sessionId }: { sessionId: string }) {
             </div>
           </div>
         )}
-
-        <div className={isFullscreen ? "mt-3 grid gap-3 opacity-80 lg:grid-cols-2" : "mt-3 grid gap-3 opacity-80 lg:grid-cols-2"}>
-          <div className="panel-steel rounded-lg p-3">
-            <div className="font-display text-[10px] uppercase tracking-widest text-muted">Sign-out leaderboard (last 3)</div>
-            <ul className="mt-1.5 space-y-1 text-xs">
-              {signedOutRanked.slice(0, 3).map((e) => (
-                <li key={e.id} className="flex justify-between border-b border-line/40 py-0.5">
-                  <span>{e.nickname}</span>
-                  <span className="tnum text-muted">{e.dnf ? "DNF" : `#${e.finishingPosition}`}</span>
-                </li>
-              ))}
-              {signedOutRanked.length === 0 && <li className="text-muted">Nobody's signed out yet.</li>}
-            </ul>
-          </div>
-
-          <div className="panel-steel rounded-lg p-3">
-            <div className="font-display text-[10px] uppercase tracking-widest text-muted">Still playing</div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
-              {stillPlaying.map((e) => (
-                <span key={e.id} className="rounded border border-steel px-1.5 py-0.5">
-                  {e.nickname}
-                </span>
-              ))}
-              {stillPlaying.length === 0 && <span className="text-muted">Nobody's currently seated.</span>}
-            </div>
-          </div>
-        </div>
       </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, large }: { label: string; value: number; large: boolean }) {
+  return (
+    <div className={`panel-steel flex flex-col justify-center rounded-lg text-center ${large ? "p-4" : "p-3"}`}>
+      <div className="font-display text-[10px] uppercase tracking-widest text-muted">{label}</div>
+      <div className={`tnum font-display ${large ? "mt-1 text-5xl" : "mt-0.5 text-3xl"}`}>{value}</div>
     </div>
   );
 }

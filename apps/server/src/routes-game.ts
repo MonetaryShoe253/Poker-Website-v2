@@ -427,7 +427,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/sessions/:id/entries", async (req) => {
     const { id } = req.params as { id: string };
     const entries = await prisma.sessionEntry.findMany({
-      where: { sessionId: id },
+      where: { sessionId: id, voidedAt: null },
       include: { player: true },
       orderBy: [{ finishingPosition: { sort: "asc", nulls: "last" } }, { player: { displayName: "asc" } }],
     });
