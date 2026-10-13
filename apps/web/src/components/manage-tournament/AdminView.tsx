@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, btn, btnPrimary, inputCls } from "../../lib/adminShared";
+import { useBlindClock } from "../../lib/useBlindClock";
 import { BlindLevelDisplay } from "./BlindLevelDisplay";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { SessionEntriesTable } from "./SessionEntriesTable";
@@ -40,7 +41,9 @@ export function AdminView({
   onDeleted: () => void;
   sessionLabel: string;
 }) {
-  const [detail, setDetail] = useState<SessionDetail | null>(null);
+  const [rawDetail, setDetail] = useState<SessionDetail | null>(null);
+  // Live view of the blind clock: rolls to the next level at 0:00 between loads.
+  const detail = useBlindClock(rawDetail);
   const [error, setError] = useState<string | null>(null);
   const [activeCountInput, setActiveCountInput] = useState("");
   const [levels, setLevels] = useState<BlindLevel[]>([]);

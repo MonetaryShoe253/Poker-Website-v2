@@ -6,6 +6,7 @@ import { prisma } from "./db";
 import { isProd } from "./env";
 import { adjustBankroll, hydrateBankroll } from "./realtime/users";
 import type { BlindLevel } from "./routes-admin";
+import { syncBlindClock } from "./services/blindClock";
 import { ensureActiveSeason, generateSessionCode } from "./services/seasons";
 import {
   applyFloor,
@@ -443,8 +444,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/sessions/:id/tournament-info", async (req) => {
     const { id } = req.params as { id: string };
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session) return { status: null };
+    const found = await prisma.session.findUnique({ where: { id } });
+    if (!found) return { status: null };
+    const session = await syncBlindClock(found);
 
     // The points structure (what each finishing position is worth) only
     // means something once late registration has closed — sign-ins stop

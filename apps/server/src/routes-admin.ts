@@ -22,6 +22,7 @@ import {
   streakBonusForWeeks,
   tournamentIcmCutoff,
 } from "./services/tournament";
+import { syncBlindClock } from "./services/blindClock";
 import { addSessionToSeries, computeSessionTimes, createTournamentSeries } from "./services/tournamentSeries";
 import { londonDateAndMinutesToUtc, londonToUtc } from "./time";
 
@@ -486,8 +487,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    const session = await prisma.session.findUnique({ where: { id }, include: { series: true } });
-    if (!session) return reply.code(404).send({ error: "No such session." });
+    const found = await prisma.session.findUnique({ where: { id }, include: { series: true } });
+    if (!found) return reply.code(404).send({ error: "No such session." });
+    const session = await syncBlindClock(found);
     const [seriesSessions, closedAt] = await Promise.all([
       prisma.session.findMany({
         where: { seriesId: session.seriesId, type: "TOURNAMENT" },
@@ -890,8 +892,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session) return reply.code(404).send({ error: "No such session." });
+    const found = await prisma.session.findUnique({ where: { id } });
+    if (!found) return reply.code(404).send({ error: "No such session." });
+    const session = await syncBlindClock(found);
     if (!session.timerStartedAt || session.isPaused) {
       return reply.code(409).send({ error: "Timer isn't running." });
     }
@@ -907,8 +910,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const admin = await requireAdmin(req, reply);
     if (!admin) return;
     const { id } = req.params as { id: string };
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session) return reply.code(404).send({ error: "No such session." });
+    const found = await prisma.session.findUnique({ where: { id } });
+    if (!found) return reply.code(404).send({ error: "No such session." });
+    const session = await syncBlindClock(found);
     if (!session.isPaused || !session.timerPausedAt || !session.timerStartedAt) {
       return reply.code(409).send({ error: "Timer isn't paused." });
     }
@@ -928,8 +932,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const parsed = z.object({ level: z.number().int().optional() }).safeParse(req.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: "Bad level." });
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session) return reply.code(404).send({ error: "No such session." });
+    const found = await prisma.session.findUnique({ where: { id } });
+    if (!found) return reply.code(404).send({ error: "No such session." });
+    const session = await syncBlindClock(found);
     const schedule = session.blindSchedule as BlindLevel[] | null;
     if (!schedule || schedule.length === 0) {
       return reply.code(400).send({ error: "Set a blind schedule first." });
@@ -961,8 +966,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const parsed = z.object({ seconds: z.number().int() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "Bad nudge amount." });
-    const session = await prisma.session.findUnique({ where: { id } });
-    if (!session) return reply.code(404).send({ error: "No such session." });
+    const found = await prisma.session.findUnique({ where: { id } });
+    if (!found) return reply.code(404).send({ error: "No such session." });
+    const session = await syncBlindClock(found);
     if (!session.timerStartedAt) return reply.code(409).send({ error: "Timer isn't running." });
     const schedule = session.blindSchedule as BlindLevel[] | null;
     const currentLevel = schedule?.[session.currentBlindLevel];

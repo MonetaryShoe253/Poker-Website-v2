@@ -3,3 +3,4 @@ export * from "./cards";
 export * from "./sockets";
 export * from "./profanity";
 export * from "./elo";
+export * from "./blindClock";

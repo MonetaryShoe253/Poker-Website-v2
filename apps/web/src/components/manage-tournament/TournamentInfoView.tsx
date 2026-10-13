@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, btn } from "../../lib/adminShared";
+import { useBlindClock } from "../../lib/useBlindClock";
 import { useFullscreen } from "../../lib/useFullscreen";
 import { BlindLevelDisplay } from "./BlindLevelDisplay";
 
@@ -41,7 +42,9 @@ interface EntryRow {
 const POLL_MS = 7_000;
 
 export function TournamentInfoView({ sessionId }: { sessionId: string }) {
-  const [info, setInfo] = useState<TournamentInfo | null>(null);
+  const [rawInfo, setInfo] = useState<TournamentInfo | null>(null);
+  // Live view of the blind clock: rolls to the next level at 0:00 between polls.
+  const info = useBlindClock(rawInfo);
   const [entries, setEntries] = useState<EntryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);

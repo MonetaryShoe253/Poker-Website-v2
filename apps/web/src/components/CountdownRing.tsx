@@ -25,6 +25,9 @@ export function CountdownRing({
 }) {
   const [remaining, setRemaining] = useState(Math.max(0, deadlineMs - Date.now()));
   useEffect(() => {
+    // Re-sync immediately on a new deadline (e.g. the next blind level) so the
+    // ring doesn't show the old 0:00 until the first tick.
+    setRemaining(Math.max(0, deadlineMs - Date.now()));
     const interval = setInterval(() => setRemaining(Math.max(0, deadlineMs - Date.now())), 200);
     return () => clearInterval(interval);
   }, [deadlineMs]);
