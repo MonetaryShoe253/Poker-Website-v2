@@ -632,21 +632,37 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       void reply.code(409).send({ error: `${player.displayName} is already signed in.` });
       return null;
     }
-    const entry = existing
-      ? await prisma.sessionEntry.update({
-          where: { id: existing.id },
-          data: {
-            signInTime: new Date(),
-            voidedAt: null,
-            signOutTime: null,
-            finishingPosition: null,
-            entrantCount: null,
-            points: null,
-            bountiesCollected: null,
-            bountyPoints: null,
-          },
-        })
-      : await prisma.sessionEntry.create({ data: { sessionId, playerId: player.id, signInTime: new Date() } });
+    const [entry] = await prisma.$transaction([
+      existing
+        ? prisma.sessionEntry.update({
+            where: { id: existing.id },
+            data: {
+              signInTime: new Date(),
+              voidedAt: null,
+              signOutTime: null,
+              finishingPosition: null,
+              entrantCount: null,
+              points: null,
+              bountiesCollected: null,
+              bountyPoints: null,
+            },
+          })
+        : prisma.sessionEntry.create({ data: { sessionId, playerId: player.id, signInTime: new Date() } }),
+      // A late registration finishes above everyone already knocked out, so
+      // each of them drops one place: a bust's position is always
+      // (entrants so far − players out before them), and only the entrant
+      // count moves. Without this, someone out 53rd stays 53rd after a 54th
+      // player joins, and the next bust collides with or skips their slot.
+      prisma.sessionEntry.updateMany({
+        where: {
+          sessionId,
+          voidedAt: null,
+          signOutTime: { not: null },
+          finishingPosition: { not: null, lt: DNF_POSITION_SENTINEL },
+        },
+        data: { finishingPosition: { increment: 1 } },
+      }),
+    ]);
 
     // Mirrors the decrement on sign-out — active players ticks up the moment
     // someone sits down instead of staying blank until the first sign-out
