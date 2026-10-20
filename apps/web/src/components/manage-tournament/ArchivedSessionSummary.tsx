@@ -54,7 +54,7 @@ export function ArchivedSessionSummary({
       <div className="panel-steel rounded-lg p-4">
         <div className="font-display text-xs uppercase tracking-widest text-muted">Final sign-in / sign-out records</div>
         <div className="mt-3">
-          <SessionEntriesTable sessionId={sessionId} editable={false} />
+          <SessionEntriesTable sessionId={sessionId} editable={false} canEditPoints />
         </div>
       </div>
     </div>

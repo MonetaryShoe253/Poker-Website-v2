@@ -434,6 +434,7 @@ export function AdminView({
           <SessionEntriesTable
             sessionId={sessionId}
             editable={detail.status !== "CREATED" && detail.status !== "SCHEDULED" && detail.status !== "ARCHIVED"}
+            canEditPoints={detail.status === "CLOSED"}
             refreshKey={entriesVersion}
             format={detail.format}
           />

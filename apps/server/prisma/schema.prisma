@@ -225,6 +225,9 @@ model SessionEntry {
   finishingPosition   Int?
   entrantCount        Int?
   points              Int?
+  /// Admin-set points for this entry. When present, scoring writes it to
+  /// `points` instead of the formula result, so it survives re-scoring.
+  pointsOverride      Int?
   buyInChips          Int?
   cashOutChips        Int?
   netChips            Int?

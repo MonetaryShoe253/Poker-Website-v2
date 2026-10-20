@@ -13,6 +13,7 @@ interface EntryRow {
   finishingPosition: number | null;
   entrantCount: number | null;
   points: number | null;
+  pointsOverride: number | null;
   bountiesCollected: number | null;
   bountyPoints: number | null;
   isDNF: boolean;
@@ -28,17 +29,24 @@ const timeFmt = (iso: string | null) =>
 export function SessionEntriesTable({
   sessionId,
   editable,
+  canEditPoints = false,
   refreshKey,
   format,
 }: {
   sessionId: string;
+  /** Position / DNF / sign-out corrections. */
   editable: boolean;
+  /** Setting points directly — only once the session is closed (or archived),
+   * since that's when points exist. */
+  canEditPoints?: boolean;
   refreshKey?: number;
   format?: TournamentFormat;
 }) {
   const [rows, setRows] = useState<EntryRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pointsEditingId, setPointsEditingId] = useState<string | null>(null);
+  const [pointsInput, setPointsInput] = useState("");
   const [posInput, setPosInput] = useState("");
   const [bountiesInput, setBountiesInput] = useState("");
   const showBounties = format === "BOUNTY";
@@ -49,13 +57,42 @@ export function SessionEntriesTable({
   );
   useEffect(load, [load, refreshKey]);
 
+  const startPointsEdit = (row: EntryRow) => {
+    setEditingId(null);
+    setPointsEditingId(row.id);
+    setPointsInput(row.points !== null ? String(row.points) : "");
+  };
+
+  const saveOverride = (id: string, points: number | null) => {
+    void api(`/api/admin/session-entries/${id}/points-override`, {
+      method: "PUT",
+      body: JSON.stringify({ points }),
+    })
+      .then(() => {
+        setPointsEditingId(null);
+        setError(null);
+        load();
+      })
+      .catch((e: Error) => setError(e.message));
+  };
+
+  const savePointsInput = (id: string) => {
+    const points = Number(pointsInput);
+    if (pointsInput.trim() === "" || !Number.isInteger(points) || points < 0) {
+      setError("Enter a whole number of points (0 or more).");
+      return;
+    }
+    saveOverride(id, points);
+  };
+
   const startEdit = (row: EntryRow) => {
+    setPointsEditingId(null);
     setEditingId(row.id);
     setPosInput(row.finishingPosition && !row.isDNF ? String(row.finishingPosition) : "");
     setBountiesInput(row.bountiesCollected !== null ? String(row.bountiesCollected) : "0");
   };
 
-  const savePoints = (id: string) => {
+  const savePosition = (id: string) => {
     const finishingPosition = Number(posInput);
     if (!Number.isInteger(finishingPosition) || finishingPosition < 1) {
       setError("Enter a valid finishing position.");
@@ -110,7 +147,7 @@ export function SessionEntriesTable({
               <th className="py-2 pr-2">Position</th>
               {showBounties && <th className="py-2 pr-2">Bounties</th>}
               <th className="py-2 pr-2">Points</th>
-              {editable && <th className="py-2 pr-2">Actions</th>}
+              {(editable || canEditPoints) && <th className="py-2 pr-2">Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -126,10 +163,40 @@ export function SessionEntriesTable({
                   {row.isDNF ? <span className="text-ember">DNF</span> : (row.finishingPosition ?? "—")}
                 </td>
                 {showBounties && <td className="py-1.5 pr-2 tnum">{row.bountiesCollected ?? 0}</td>}
-                <td className="py-1.5 pr-2 tnum">{row.points ?? "—"}</td>
-                {editable && (
+                <td className="py-1.5 pr-2 tnum">
+                  {row.points ?? "—"}
+                  {row.pointsOverride !== null && (
+                    <span className="ml-1 text-[10px] uppercase tracking-widest text-muted" title="Set by an admin">
+                      manual
+                    </span>
+                  )}
+                </td>
+                {(editable || canEditPoints) && (
                   <td className="py-1.5 pr-2">
-                    {editingId === row.id ? (
+                    {pointsEditingId === row.id ? (
+                      <div className="flex flex-wrap items-center gap-1">
+                        <input
+                          value={pointsInput}
+                          onChange={(e) => setPointsInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && savePointsInput(row.id)}
+                          placeholder="Points"
+                          inputMode="numeric"
+                          autoFocus
+                          className={`${inputCls} w-20`}
+                        />
+                        <button className={btn} onClick={() => savePointsInput(row.id)}>
+                          Save
+                        </button>
+                        {row.pointsOverride !== null && (
+                          <button className={btn} onClick={() => saveOverride(row.id, null)}>
+                            Reset to calculated
+                          </button>
+                        )}
+                        <button className={btn} onClick={() => setPointsEditingId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    ) : editingId === row.id ? (
                       <div className="flex flex-wrap items-center gap-1">
                         <input
                           value={posInput}
@@ -145,7 +212,7 @@ export function SessionEntriesTable({
                             className={`${inputCls} w-16`}
                           />
                         )}
-                        <button className={btn} onClick={() => savePoints(row.id)}>
+                        <button className={btn} onClick={() => savePosition(row.id)}>
                           Save
                         </button>
                         <button className={btn} onClick={() => setEditingId(null)}>
@@ -154,10 +221,17 @@ export function SessionEntriesTable({
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        <button className={btn} onClick={() => startEdit(row)}>
-                          Edit points
-                        </button>
-                        {row.isDNF ? (
+                        {canEditPoints && row.finishingPosition !== null && (
+                          <button className={btn} onClick={() => startPointsEdit(row)}>
+                            Edit points
+                          </button>
+                        )}
+                        {editable && (
+                          <button className={btn} onClick={() => startEdit(row)}>
+                            Edit position
+                          </button>
+                        )}
+                        {!editable ? null : row.isDNF ? (
                           <button className={btn} onClick={() => unmarkDnf(row.id)}>
                             Unmark DNF
                           </button>
@@ -166,7 +240,7 @@ export function SessionEntriesTable({
                             Mark DNF
                           </button>
                         )}
-                        {row.signOutTime && !row.isDNF && (
+                        {editable && row.signOutTime && !row.isDNF && (
                           <button className={btn} onClick={() => undoSignout(row.id)}>
                             Undo sign-out
                           </button>

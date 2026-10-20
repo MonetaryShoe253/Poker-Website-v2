@@ -300,7 +300,13 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       if (isDnf) {
         await prisma.sessionEntry.update({
           where: { id: entry.id },
-          data: { entrantCount, basePoints: 0, floorPoints: 0, bountyPoints, points: Math.floor(bountyPoints) },
+          data: {
+            entrantCount,
+            basePoints: 0,
+            floorPoints: 0,
+            bountyPoints,
+            points: entry.pointsOverride ?? Math.floor(bountyPoints),
+          },
         });
       } else {
         const basePoints = calculateTournamentPoints(entry.finishingPosition, entrantCount, formula);
@@ -312,7 +318,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
             basePoints,
             floorPoints: floored - basePoints,
             bountyPoints,
-            points: Math.floor(floored + streakBonus + bountyPoints),
+            // An admin's manual points win over the formula; the breakdown
+            // fields above still show what the formula would have given.
+            points: entry.pointsOverride ?? Math.floor(floored + streakBonus + bountyPoints),
           },
         });
       }
@@ -556,6 +564,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       finishingPosition: e.finishingPosition,
       entrantCount: e.entrantCount,
       points: e.points,
+      pointsOverride: e.pointsOverride,
       bountiesCollected: e.bountiesCollected,
       bountyPoints: e.bountyPoints,
       isDNF: e.finishingPosition === DNF_POSITION_SENTINEL,
@@ -643,6 +652,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
               finishingPosition: null,
               entrantCount: null,
               points: null,
+              pointsOverride: null,
               bountiesCollected: null,
               bountyPoints: null,
             },
@@ -842,6 +852,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         bountiesCollected: null,
         bountyPoints: null,
         points: null,
+        pointsOverride: null,
       },
     });
     if (existing.session.status === "CLOSED") {
@@ -1047,6 +1058,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       where: { id },
       data: {
         finishingPosition: parsed.data.finishingPosition,
+        // A new position means formula points again, not a stale manual value.
+        pointsOverride: null,
         ...(parsed.data.bountiesCollected !== undefined
           ? { bountiesCollected: parsed.data.bountiesCollected }
           : {}),
@@ -1072,6 +1085,42 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       ok: true,
       entry: { id: updated.id, finishingPosition: updated.finishingPosition, entrantCount: updated.entrantCount, points: updated.points },
     };
+  });
+
+  /** Sets an entry's points directly (the "Edit points" action) — distinct
+   * from the position edit above, which re-derives points from a finishing
+   * position. Stored as an override so later re-scoring (any correction in
+   * the session) keeps it; `points: null` clears it back to the formula.
+   * Works on closed and archived sessions alike, so past results can be
+   * corrected. */
+  const PointsOverrideBody = z.object({ points: z.number().int().min(0).max(100_000).nullable() });
+  app.put("/api/admin/session-entries/:id/points-override", async (req, reply) => {
+    const admin = await requireAdmin(req, reply);
+    if (!admin) return;
+    const { id } = req.params as { id: string };
+    const parsed = PointsOverrideBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Enter a whole number of points (0 or more)." });
+    const existing = await prisma.sessionEntry.findUnique({ where: { id }, include: { session: true } });
+    if (!existing) return reply.code(404).send({ error: "No such entry." });
+    if (existing.session.type !== "TOURNAMENT") {
+      return reply.code(400).send({ error: "Not a tournament session." });
+    }
+    if (existing.session.status !== "CLOSED" && existing.session.status !== "ARCHIVED") {
+      return reply.code(409).send({ error: "Points are worked out when the session closes. Close it first." });
+    }
+    if (existing.finishingPosition === null) {
+      return reply.code(409).send({ error: "This player has no result. Set their position first." });
+    }
+    await prisma.sessionEntry.update({ where: { id }, data: { pointsOverride: parsed.data.points } });
+    await finalizeSessionScoring(existing.sessionId, existing.session.seriesId);
+    const updated = await prisma.sessionEntry.findUniqueOrThrow({ where: { id } });
+    await audit(
+      admin.userId,
+      parsed.data.points === null ? "sessionEntry.points.override.clear" : "sessionEntry.points.override",
+      { sessionEntryId: id, sessionId: existing.sessionId, from: existing.points, to: updated.points },
+      { targetType: "sessionEntry", targetId: id },
+    );
+    return { ok: true, entry: { id, points: updated.points, pointsOverride: updated.pointsOverride } };
   });
 
   async function assertWithinDnfWindow(sessionId: string, reply: FastifyReply): Promise<boolean> {
@@ -1104,7 +1153,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!(await assertWithinDnfWindow(existing.sessionId, reply))) return;
     await prisma.sessionEntry.update({
       where: { id },
-      data: { finishingPosition: DNF_POSITION_SENTINEL, points: 0 },
+      data: { finishingPosition: DNF_POSITION_SENTINEL, points: 0, pointsOverride: null },
     });
     await audit(
       admin.userId,
@@ -1128,7 +1177,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(409).send({ error: "Entry isn't marked DNF." });
     }
     if (!(await assertWithinDnfWindow(existing.sessionId, reply))) return;
-    await prisma.sessionEntry.update({ where: { id }, data: { finishingPosition: null, points: null } });
+    await prisma.sessionEntry.update({ where: { id }, data: { finishingPosition: null, points: null, pointsOverride: null } });
     await audit(
       admin.userId,
       "sessionEntry.dnf.unmark",
