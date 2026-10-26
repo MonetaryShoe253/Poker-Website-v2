@@ -44,6 +44,13 @@ const SettingsBody = z.object({
   showLosing: z.boolean().optional(),
 });
 
+/** Tournament-management series (the ones with a session template) run
+ * through the kiosk: positions come from sign-outs and points are scored at
+ * close. Self-submitting into one would bypass that and take the player's
+ * one entry slot, so only rolling-season sessions (Thursday cash) take
+ * code-based submissions. */
+const SELF_SUBMIT_SERIES = { series: { sessionStartMinutesOfDay: null } } as const;
+
 export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   // --- Seasons & sessions ------------------------------------------------------
 
@@ -105,6 +112,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         submissionsOpenAt: { lte: now },
         submissionsCloseAt: { gte: now },
         status: "SCHEDULED",
+        ...SELF_SUBMIT_SERIES,
       },
       orderBy: { date: "asc" },
     });
@@ -142,6 +150,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!session || session.status !== "SCHEDULED" || session.type !== kind) {
       return reply.code(404).send({ error: "That session doesn't exist." });
+    }
+    if (session.series.sessionStartMinutesOfDay !== null) {
+      return reply.code(403).send({
+        error: "Tonight's tournament results come from the sign-in desk. No need to submit.",
+      });
     }
     const now = new Date();
     if (now < session.submissionsOpenAt || now > session.submissionsCloseAt) {
@@ -333,7 +346,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     };
     const submissions = await prisma.sessionEntry.findMany({
       where,
-      include: { player: true, user: { include: { profile: true } } },
+      include: { player: true, session: true, user: { include: { profile: true } } },
     });
 
     const weekAgo = new Date(Date.now() - 7 * 86_400_000);
@@ -344,6 +357,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         avatarId: string;
         net: number;
         netLastWeek: number;
+        sessionsLastWeek: number;
         sessions: number;
         biggestNight: number;
       }
@@ -354,11 +368,15 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         avatarId: sub.user?.profile?.avatarId ?? "spade-ember",
         net: 0,
         netLastWeek: 0,
+        sessionsLastWeek: 0,
         sessions: 0,
         biggestNight: Number.MIN_SAFE_INTEGER,
       };
       entry.net += sub.netChips ?? 0;
-      if (sub.createdAt < weekAgo) entry.netLastWeek += sub.netChips ?? 0;
+      if (sub.session.date < weekAgo) {
+        entry.netLastWeek += sub.netChips ?? 0;
+        entry.sessionsLastWeek += 1;
+      }
       entry.sessions += 1;
       entry.biggestNight = Math.max(entry.biggestNight, sub.netChips ?? 0);
       byPlayer.set(sub.playerId, entry);
@@ -369,7 +387,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       (a, b) =>
         b[1].net - a[1].net || b[1].sessions - a[1].sessions || b[1].biggestNight - a[1].biggestNight,
     );
-    const sortThen = [...entries].sort((a, b) => b[1].netLastWeek - a[1].netLastWeek);
+    // Last week's ranking only includes players who were on the board then;
+    // anyone whose first night is this week has no movement to show yet.
+    const sortThen = entries
+      .filter(([, e]) => e.sessionsLastWeek > 0)
+      .sort((a, b) => b[1].netLastWeek - a[1].netLastWeek);
     const thenIndex = new Map(sortThen.map(([id], i) => [id, i]));
 
     return sortNow.map(([playerId, e], i) => ({
@@ -379,7 +401,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       net: e.net,
       sessions: e.sessions,
       biggestNight: e.biggestNight === Number.MIN_SAFE_INTEGER ? null : e.biggestNight,
-      movement: (thenIndex.get(playerId) ?? i) - i,
+      movement: thenIndex.has(playerId) ? thenIndex.get(playerId)! - i : null,
     }));
   });
 
@@ -555,21 +577,24 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   // --- Dev/test helpers (never in production) -------------------------------------------
 
   if (!isProd) {
-    /** Ensure a session exists for today with an open window; returns its code. */
-    app.post("/api/dev/ensure-test-session", async () => {
+    /** Ensure a session exists for today with an open window; returns its code.
+     * Body `{ type: "CASH" }` makes a cash session; default is a tournament. */
+    app.post("/api/dev/ensure-test-session", async (req) => {
+      const type = (req.body as { type?: string } | undefined)?.type === "CASH" ? "CASH" : "TOURNAMENT";
       const season = await ensureActiveSeason();
       const today = londonMidnight(new Date());
       const parts = londonParts(today);
       const session = await prisma.session.upsert({
         where: {
-          seriesId_date_type: { seriesId: season.id, date: today, type: "TOURNAMENT" },
+          seriesId_date_type: { seriesId: season.id, date: today, type },
         },
         create: {
           seriesId: season.id,
           date: today,
-          type: "TOURNAMENT",
+          type,
+          status: "SCHEDULED",
           code: generateSessionCode(),
-          blindSchedule: defaultBlindSchedule("TOURNAMENT"),
+          blindSchedule: defaultBlindSchedule(type),
           submissionsOpenAt: new Date(Date.now() - 3_600_000),
           submissionsCloseAt: londonToUtc(parts.year, parts.month, parts.day, 23, 59, 59),
         },

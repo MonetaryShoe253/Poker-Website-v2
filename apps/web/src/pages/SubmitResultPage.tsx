@@ -35,6 +35,9 @@ export function SubmitResultPage() {
   }, []);
 
   const session = sessions?.find((s) => s.id === sessionId);
+  // Empty number inputs would otherwise go up as 0 and land a fake result.
+  const resultFilled =
+    session?.type === "TOURNAMENT" ? position !== "" && entrants !== "" : buyIn !== "" && cashOut !== "";
 
   const submit = async () => {
     if (!session) return;
@@ -186,24 +189,37 @@ export function SubmitResultPage() {
               />
             </div>
           ) : (
-            <div className="flex gap-3">
-              <input
-                className={inputClass}
-                type="number"
-                min={0}
-                placeholder="Buy-in (chips)"
-                value={buyIn}
-                onChange={(e) => setBuyIn(e.target.value)}
-              />
-              <input
-                className={inputClass}
-                type="number"
-                min={0}
-                placeholder="Cash-out (chips)"
-                value={cashOut}
-                onChange={(e) => setCashOut(e.target.value)}
-              />
-            </div>
+            <>
+              <div className="flex gap-3">
+                <label className="block w-full text-xs text-muted">
+                  Total bought in
+                  <input
+                    className={`${inputClass} mt-1`}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    placeholder="e.g. 1000"
+                    value={buyIn}
+                    onChange={(e) => setBuyIn(e.target.value)}
+                  />
+                </label>
+                <label className="block w-full text-xs text-muted">
+                  Chips at the end
+                  <input
+                    className={`${inputClass} mt-1`}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    placeholder="e.g. 1450"
+                    value={cashOut}
+                    onChange={(e) => setCashOut(e.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-muted">
+                Bought in more than once? Add every buy-in together.
+              </p>
+            </>
           )}
           {session?.type === "CASH" && buyIn !== "" && cashOut !== "" && (
             <p className="tnum text-sm text-muted">
@@ -218,7 +234,7 @@ export function SubmitResultPage() {
           <button
             className="w-full rounded bg-ember-deep px-4 py-2.5 font-display tracking-wide text-white hover:bg-ember disabled:opacity-50"
             onClick={() => void submit()}
-            disabled={busy || !session || code.trim().length < 6}
+            disabled={busy || !session || code.trim().length < 6 || !resultFilled}
           >
             Submit result
           </button>

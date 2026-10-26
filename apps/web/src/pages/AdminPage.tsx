@@ -78,63 +78,107 @@ function Sessions() {
     code: string;
     status: string;
     submissions: number;
+    kiosk: boolean;
+    submissionsOpenAt: string;
+    submissionsCloseAt: string;
   }
   const [rows, setRows] = useState<Row[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [oneOffDate, setOneOffDate] = useState("");
-  const [oneOffType, setOneOffType] = useState<"TOURNAMENT" | "CASH">("TOURNAMENT");
+  const [oneOffType, setOneOffType] = useState<"TOURNAMENT" | "CASH">("CASH");
   const load = useCallback(() => void api<Row[]>("/api/admin/sessions").then(setRows), []);
   useEffect(load, [load]);
 
+  const run = (p: Promise<unknown>) =>
+    void p.then(
+      () => {
+        setError(null);
+        load();
+      },
+      (e: Error) => setError(e.message),
+    );
+
+  const londonDay = (d: string | Date) =>
+    new Date(d).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const today = londonDay(new Date());
+  const now = Date.now();
+
   return (
     <div>
+      <p className="mb-3 max-w-2xl text-sm text-muted">
+        On a cash night, open this tab and read out tonight's code. Players submit their buy-in
+        and cash-out at <span className="font-mono text-text">/submit</span> between 17:00 and
+        23:59. Tournament nights run from Tournament management instead.
+      </p>
+      {error && <p className="mb-3 text-sm text-ember">{error}</p>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map((s) => (
-          <div
-            key={s.id}
-            className={`panel-steel rounded-lg p-4 ${s.status === "CANCELLED" ? "opacity-50" : ""}`}
-          >
-            <div className="flex items-baseline justify-between">
-              <span className="font-display text-sm">
-                {new Date(s.date).toLocaleDateString("en-GB", {
-                  weekday: "short",
-                  day: "numeric",
-                  month: "short",
-                })}
-              </span>
-              <span className="text-xs uppercase tracking-widest text-muted">{s.type}</span>
-            </div>
-            {/* The code, displayed BIG — this is the screen the host opens. */}
-            <div className="tnum mt-2 text-center font-mono text-3xl font-bold tracking-[0.3em] text-ember">
-              {s.code}
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-muted">
-              <span>{s.submissions} submissions</span>
-              <span>{s.status}</span>
-            </div>
-            <div className="mt-2 flex gap-2">
-              <button
-                className={btn}
-                onClick={() =>
-                  void api(`/api/admin/sessions/${s.id}/regenerate-code`, { method: "POST" }).then(
-                    load,
-                  )
-                }
-              >
-                New code
-              </button>
-              {s.status === "SCHEDULED" && (
-                <button
-                  className={btn}
-                  onClick={() =>
-                    void api(`/api/admin/sessions/${s.id}/cancel`, { method: "POST" }).then(load)
-                  }
-                >
-                  Cancel
-                </button>
+        {rows.map((s) => {
+          const isToday = londonDay(s.date) === today;
+          const windowOpen =
+            now >= new Date(s.submissionsOpenAt).getTime() &&
+            now <= new Date(s.submissionsCloseAt).getTime();
+          return (
+            <div
+              key={s.id}
+              className={`panel-steel rounded-lg p-4 ${isToday && !s.kiosk ? "border border-ember" : ""}`}
+            >
+              <div className="flex items-baseline justify-between">
+                <span className="font-display text-sm">
+                  {new Date(s.date).toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    timeZone: "Europe/London",
+                  })}
+                  {isToday && <span className="ml-2 text-xs text-ember">TONIGHT</span>}
+                </span>
+                <span className="text-xs uppercase tracking-widest text-muted">
+                  {s.type === "CASH" ? "Cash" : "Tournament"}
+                </span>
+              </div>
+              {s.kiosk ? (
+                <p className="mt-3 text-center text-xs text-muted">
+                  Runs from Tournament management (sign-in desk). No code needed.
+                </p>
+              ) : (
+                <>
+                  {/* The code, displayed BIG — this is the screen the host opens. */}
+                  <div className="tnum mt-2 text-center font-mono text-3xl font-bold tracking-[0.3em] text-ember">
+                    {s.code}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                    <span>
+                      {s.submissions} submission{s.submissions === 1 ? "" : "s"}
+                    </span>
+                    <span>{windowOpen ? "Submissions open" : "Opens 17:00 on the night"}</span>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      className={btn}
+                      onClick={() =>
+                        run(api(`/api/admin/sessions/${s.id}/regenerate-code`, { method: "POST" }))
+                      }
+                    >
+                      New code
+                    </button>
+                    {s.submissions === 0 && (
+                      <button
+                        className={btn}
+                        onClick={() => {
+                          if (window.confirm("Delete this session? Nobody will be able to submit for it.")) {
+                            run(api(`/api/admin/sessions/${s.id}`, { method: "DELETE" }));
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="panel-steel mt-4 flex flex-wrap items-center gap-2 rounded-lg p-4">
         <span className="font-display text-xs uppercase tracking-widest text-muted">
@@ -151,17 +195,19 @@ function Sessions() {
           onChange={(e) => setOneOffType(e.target.value as "TOURNAMENT" | "CASH")}
           className={inputCls}
         >
-          <option value="TOURNAMENT">Tournament</option>
           <option value="CASH">Cash</option>
+          <option value="TOURNAMENT">Tournament</option>
         </select>
         <button
           className={btnPrimary}
           disabled={!oneOffDate}
           onClick={() =>
-            void api("/api/admin/sessions", {
-              method: "POST",
-              body: JSON.stringify({ date: oneOffDate, type: oneOffType }),
-            }).then(load)
+            run(
+              api("/api/admin/sessions", {
+                method: "POST",
+                body: JSON.stringify({ date: oneOffDate, type: oneOffType }),
+              }),
+            )
           }
         >
           Create
@@ -180,11 +226,15 @@ function Submissions() {
     finishingPosition: number | null;
     entrantCount: number | null;
     points: number | null;
+    buyInChips: number | null;
+    cashOutChips: number | null;
     netChips: number | null;
     voided: boolean;
   }
   const [rows, setRows] = useState<Row[]>([]);
   const [q, setQ] = useState("");
+  const [editing, setEditing] = useState<{ id: string; buyIn: string; cashOut: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const load = useCallback(
     () =>
       void api<Row[]>(`/api/admin/submissions${q ? `?q=${encodeURIComponent(q)}` : ""}`).then(
@@ -194,8 +244,24 @@ function Submissions() {
   );
   useEffect(load, [load]);
 
+  const saveEdit = () => {
+    if (!editing) return;
+    void api(`/api/admin/submissions/${editing.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ buyInChips: Number(editing.buyIn), cashOutChips: Number(editing.cashOut) }),
+    }).then(
+      () => {
+        setEditing(null);
+        setError(null);
+        load();
+      },
+      (e: Error) => setError(e.message),
+    );
+  };
+
   return (
     <div>
+      {error && <p className="mb-2 text-sm text-ember">{error}</p>}
       <input
         placeholder="Filter by nickname or email…"
         value={q}
@@ -208,7 +274,7 @@ function Submissions() {
             <th className="py-2 pr-2">Player</th>
             <th className="py-2 pr-2">Session</th>
             <th className="py-2 pr-2">Result</th>
-            <th className="py-2 pr-2">Value</th>
+            <th className="py-2 pr-2">Points / net</th>
             <th className="py-2 pr-2"></th>
           </tr>
         </thead>
@@ -217,17 +283,72 @@ function Submissions() {
             <tr key={s.id} className={`border-b border-line/40 ${s.voided ? "opacity-40" : ""}`}>
               <td className="py-1.5 pr-2 font-display">{s.nickname}</td>
               <td className="py-1.5 pr-2 text-muted">
-                {s.sessionType} · {new Date(s.sessionDate).toLocaleDateString("en-GB")}
+                {s.sessionType} · {new Date(s.sessionDate).toLocaleDateString("en-GB", { timeZone: "Europe/London" })}
               </td>
               <td className="py-1.5 pr-2">
-                {s.finishingPosition !== null
-                  ? `${s.finishingPosition}/${s.entrantCount}`
-                  : s.netChips !== null
-                    ? `net ${s.netChips >= 0 ? "+" : ""}${s.netChips}`
-                    : "—"}
+                {editing?.id === s.id ? (
+                  <span className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      value={editing.buyIn}
+                      onChange={(e) => setEditing({ ...editing, buyIn: e.target.value })}
+                      className={`${inputCls} tnum w-20`}
+                      aria-label="Buy-in chips"
+                    />
+                    →
+                    <input
+                      type="number"
+                      min={0}
+                      value={editing.cashOut}
+                      onChange={(e) => setEditing({ ...editing, cashOut: e.target.value })}
+                      className={`${inputCls} tnum w-20`}
+                      aria-label="Cash-out chips"
+                    />
+                  </span>
+                ) : s.finishingPosition !== null ? (
+                  `${s.finishingPosition}/${s.entrantCount}`
+                ) : s.buyInChips !== null ? (
+                  `${s.buyInChips.toLocaleString()} → ${(s.cashOutChips ?? 0).toLocaleString()}`
+                ) : (
+                  "—"
+                )}
               </td>
-              <td className="tnum py-1.5 pr-2">{s.points ?? s.netChips ?? "—"}</td>
-              <td className="py-1.5">
+              <td className="tnum py-1.5 pr-2">
+                {s.sessionType === "CASH" && s.netChips !== null
+                  ? `${s.netChips >= 0 ? "+" : ""}${s.netChips.toLocaleString()}`
+                  : (s.points ?? "—")}
+              </td>
+              <td className="flex gap-1 py-1.5">
+                {s.sessionType === "CASH" &&
+                  !s.voided &&
+                  (editing?.id === s.id ? (
+                    <>
+                      <button
+                        className={btnPrimary}
+                        disabled={editing.buyIn === "" || editing.cashOut === ""}
+                        onClick={saveEdit}
+                      >
+                        Save
+                      </button>
+                      <button className={btn} onClick={() => setEditing(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className={btn}
+                      onClick={() =>
+                        setEditing({
+                          id: s.id,
+                          buyIn: String(s.buyInChips ?? 0),
+                          cashOut: String(s.cashOutChips ?? 0),
+                        })
+                      }
+                    >
+                      Edit
+                    </button>
+                  ))}
                 {s.voided ? (
                   <button
                     className={btn}

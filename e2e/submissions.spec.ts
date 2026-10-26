@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, signupVerifiedUser } from "./helpers";
+import { API, openSubmitFor, signupVerifiedUser } from "./helpers";
 
 /**
  * P4 gate: submit-with-code lands on the board; wrong code and duplicate
@@ -19,7 +19,7 @@ test("session result submission: wrong code, success, board, duplicate", async (
   expect(session.code).toMatch(/^[2-9A-HJ-NP-Z]{6}$/);
 
   // --- Wrong code is rejected with a helpful error -----------------------------
-  await page.goto("/submit");
+  await openSubmitFor(page, session.id);
   await page.getByPlaceholder("SESSION CODE").fill("222222");
   await page.getByPlaceholder("Your finish (e.g. 3)").fill("2");
   await page.getByPlaceholder("Total entrants").fill("10");
@@ -31,15 +31,16 @@ test("session result submission: wrong code, success, board, duplicate", async (
   await page.getByRole("button", { name: "Submit result" }).click();
   await expect(page.getByText("RESULT IN")).toBeVisible();
 
-  // --- It's on the board (2nd place = 7 points by the default scheme) ----------
+  // --- It's on the board (points come from the admin-tunable ICM formula, so
+  // only assert the row shows up with a positive points total) ---------------
   await page.getByRole("link", { name: "See the leaderboards" }).click();
   await expect(page).toHaveURL(/leaderboards/);
   const row = page.getByRole("row", { name: new RegExp(nickname) });
   await expect(row).toBeVisible();
-  await expect(row).toContainText("7");
+  await expect(row.getByRole("cell").nth(2)).toHaveText(/^[1-9]\d*$/);
 
   // --- Duplicate is rejected at the database level ------------------------------
-  await page.goto("/submit");
+  await openSubmitFor(page, session.id);
   await page.getByPlaceholder("SESSION CODE").fill(session.code);
   await page.getByPlaceholder("Your finish (e.g. 3)").fill("1");
   await page.getByPlaceholder("Total entrants").fill("10");

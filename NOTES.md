@@ -3,6 +3,28 @@
 Running log, newest at top. Each entry: what was simplified/deferred, why, and what "done
 properly" would look like.
 
+## Thursday cash leaderboard review (tournament-integration)
+
+- Code self-submission (`/submit`) is now only for rolling-season sessions
+  (Thursday cash). Tournament-series sessions run from the kiosk and refuse
+  code submissions, so a player can't use up their one entry slot before the
+  TD opens the night.
+- One-off sessions from the admin Sessions tab are created `SCHEDULED`
+  (the schema default became `CREATED`, which code submissions reject).
+- Admin Sessions: dead "Cancel" button (route/status removed in this branch)
+  replaced with "Delete" for sessions with no submissions. Kiosk-run sessions
+  show no code.
+- Admin Submissions: cash results can be edited (buy-in / cash-out). A voided
+  entry still holds the player's unique slot, so editing is the way to fix a
+  typo.
+- Cash board "Week" movement compares against the ranking as of 7 days ago by
+  session date; players with no result before then show "New".
+- Leaderboards keep a separate season pick per board; Thursday defaults to the
+  current rolling season.
+- Deferred: the default recurrence still auto-creates Tuesday TOURNAMENT
+  sessions in the rolling season, which accept code submissions alongside the
+  kiosk series. Decide whether to drop Tuesday from the recurrence.
+
 ## P9 — Launch review (hardening + portfolio polish)
 
 - **Fail-loud production env guard** (`env.ts`): in `NODE_ENV=production` the server now

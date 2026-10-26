@@ -26,7 +26,8 @@ interface CashRow {
   net: number;
   sessions: number;
   biggestNight: number | null;
-  movement: number;
+  /** Places gained since a week ago; null when the player is new this week. */
+  movement: number | null;
 }
 interface EloBoard {
   entries: Array<{
@@ -39,7 +40,8 @@ interface EloBoard {
   climbers: Array<{ nickname: string | null; climb: number }>;
 }
 
-function Movement({ value }: { value: number }) {
+function Movement({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-xs text-muted">New</span>;
   if (value > 0) return <span className="text-green-400">▲{value}</span>;
   if (value < 0) return <span className="text-ember">▼{-value}</span>;
   return <span className="text-muted">—</span>;
@@ -56,10 +58,17 @@ type TournamentSortKey = "points" | "avgFinish" | "bestFinish";
 export function LeaderboardsPage() {
   const [tab, setTab] = useState<Tab>("tournament");
   const [seasons, setSeasons] = useState<SeasonInfo[]>([]);
-  // Defaults to the most recently created series once /api/seasons loads
-  // (see the effect below) — series aren't reliably flagged "active" (new
-  // tournament series never are), so that's a better default than "all".
-  const [seasonId, setSeasonId] = useState<string>("all");
+  // Each board keeps its own season pick. Defaults once /api/seasons loads:
+  // Tuesday → the most recently created tournament series (those are never
+  // flagged "active"); Thursday → the current rolling season, which is what
+  // collects the cash sessions.
+  const [seasonByBoard, setSeasonByBoard] = useState<{ tournament: string; cash: string }>({
+    tournament: "all",
+    cash: "all",
+  });
+  const seasonId = tab === "cash" ? seasonByBoard.cash : seasonByBoard.tournament;
+  const setSeasonId = (id: string) =>
+    setSeasonByBoard((prev) => (tab === "cash" ? { ...prev, cash: id } : { ...prev, tournament: id }));
   const [tournament, setTournament] = useState<TournamentRow[]>([]);
   const [cash, setCash] = useState<CashRow[]>([]);
   const [elo, setElo] = useState<EloBoard | null>(null);
@@ -110,35 +119,33 @@ export function LeaderboardsPage() {
       .then((r) => r.json())
       .then((list: SeasonInfo[]) => {
         setSeasons(list);
-        const newest = [...list]
-          .filter((s) => s.hasTemplate)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
-        if (newest) setSeasonId(newest.id);
+        const byNewest = [...list].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+        const tournamentDefault = byNewest.find((s) => s.hasTemplate);
+        const rolling = byNewest.filter((s) => !s.hasTemplate);
+        const cashDefault = rolling.find((s) => s.isActive) ?? rolling[0];
+        setSeasonByBoard({
+          tournament: tournamentDefault?.id ?? "all",
+          cash: cashDefault?.id ?? "all",
+        });
       });
   }, []);
 
-  // Switching between the tournament/cash boards can leave the previously
-  // selected season invalid for the new board (it only ever had data for
-  // the other one) — fall back to "all" rather than silently feeding the
-  // other board's id into a fetch that can never return anything for it.
-  useEffect(() => {
-    if (seasonId === "all") return;
-    if (!visibleSeasons.some((s) => s.id === seasonId)) setSeasonId("all");
-  }, [tab, visibleSeasons, seasonId]);
-
   // A "from session / to session" range only has one well-defined meaning
   // within a single series, so it's only offered once one is selected.
+  const tournamentSeasonId = seasonByBoard.tournament;
   useEffect(() => {
     setFromOrdinal("");
     setToOrdinal("");
-    if (!seasonId || seasonId === "all") {
+    if (!tournamentSeasonId || tournamentSeasonId === "all") {
       setSeriesSessions([]);
       return;
     }
-    void fetch(`/api/seasons/${seasonId}/tournament-sessions`)
+    void fetch(`/api/seasons/${tournamentSeasonId}/tournament-sessions`)
       .then((r) => r.json())
       .then(setSeriesSessions);
-  }, [seasonId]);
+  }, [tournamentSeasonId]);
 
   const fromDate = fromOrdinal ? (seriesSessions[fromOrdinal - 1]?.date ?? "") : "";
   const toDate = toOrdinal ? (seriesSessions[toOrdinal - 1]?.date ?? "") : "";

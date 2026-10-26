@@ -27,3 +27,12 @@ export async function signupVerifiedUser(
   await expect(page).toHaveURL(/play/);
   return { email, nickname };
 }
+
+/** Open /submit and pick the given session (dev can have a tournament and a
+ * cash session open on the same day, which shows a picker). */
+export async function openSubmitFor(page: Page, sessionId: string): Promise<void> {
+  await page.goto("/submit");
+  await expect(page.getByPlaceholder("SESSION CODE")).toBeVisible();
+  const picker = page.getByRole("combobox");
+  if ((await picker.count()) > 0) await picker.selectOption(sessionId);
+}

@@ -150,7 +150,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const sessions = await prisma.session.findMany({
       where: { date: { gte: new Date(Date.now() - 14 * 86_400_000) } },
       orderBy: { date: "asc" },
-      include: { _count: { select: { entries: true } } },
+      include: {
+        series: { select: { sessionStartMinutesOfDay: true } },
+        _count: { select: { entries: { where: { voidedAt: null } } } },
+      },
     });
     return sessions.map((s) => ({
       id: s.id,
@@ -159,6 +162,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       code: s.code,
       status: s.status,
       submissions: s._count.entries,
+      // Tournament-series sessions run from the kiosk, not code submissions.
+      kiosk: s.series.sessionStartMinutesOfDay !== null,
+      submissionsOpenAt: s.submissionsOpenAt,
+      submissionsCloseAt: s.submissionsCloseAt,
     }));
   });
 
@@ -1318,6 +1325,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         seriesId: series.id,
         date: londonToUtc(y, m, d),
         type: parsed.data.type,
+        // The schema default is CREATED (the tournament lifecycle's first
+        // state); code submissions only accept SCHEDULED sessions.
+        status: "SCHEDULED",
         code: generateSessionCode(),
         blindSchedule: defaultBlindSchedule(parsed.data.type),
         submissionsOpenAt: londonToUtc(y, m, d, 17),
