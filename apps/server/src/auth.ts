@@ -87,7 +87,7 @@ export const auth = betterAuth({
       create: {
         after: async (user) => {
           // Auto-promote the configured admin account.
-          if (env.ADMIN_EMAIL && user.email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase()) {
+          if (adminEmail() && user.email.toLowerCase() === adminEmail()) {
             await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
           }
           // Every account gets a linked Player — the tournament/kiosk identity.
@@ -115,6 +115,32 @@ export const auth = betterAuth({
 
 export type AuthSessionData = Awaited<ReturnType<typeof auth.api.getSession>>;
 
+/** ADMIN_EMAIL normalised (dashboards make stray spaces/capitals easy). */
+function adminEmail(): string | null {
+  return env.ADMIN_EMAIL?.trim().toLowerCase() || null;
+}
+
+/**
+ * The create hook only promotes accounts made *after* ADMIN_EMAIL is set.
+ * Setting it on an existing deploy (e.g. after first signing in with Google)
+ * redeploys, so promote a matching existing account here at boot. Verified
+ * accounts only: an unverified one could be a stranger who registered the
+ * address first.
+ */
+async function promoteExistingAdmin(): Promise<void> {
+  const email = adminEmail();
+  if (!email) return;
+  const { count } = await prisma.user.updateMany({
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      emailVerified: true,
+      role: { not: "ADMIN" },
+    },
+    data: { role: "ADMIN" },
+  });
+  if (count > 0) console.log(`[bootstrap] promoted existing account to admin: ${email}`);
+}
+
 /**
  * Guarantees a working admin login exists the moment a fresh deploy comes up,
  * rather than depending on someone signing up and clicking a verification
@@ -128,6 +154,7 @@ export type AuthSessionData = Awaited<ReturnType<typeof auth.api.getSession>>;
  * deploy-only env var, not an inbox a stranger controls.
  */
 export async function ensureBootstrapAdmin(port: number): Promise<void> {
+  await promoteExistingAdmin();
   if (!env.ADMIN_EMAIL || !env.ADMIN_BOOTSTRAP_PASSWORD) return;
   const existing = await prisma.user.findUnique({ where: { email: env.ADMIN_EMAIL } });
   if (existing) return;
