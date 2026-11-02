@@ -43,6 +43,13 @@ test("admin cockpit: codes, void/restore, scheme recompute, banner", async ({ pa
   // --- Sessions: the code is displayed big for whoever runs the night ----------
   await page.getByRole("button", { name: "Sessions" }).click();
   await expect(page.getByText(session.code).first()).toBeVisible();
+  // The QR overlay shows the same code and closes again.
+  await page.getByRole("button", { name: "Show QR" }).first().click();
+  const qr = page.getByRole("dialog");
+  await expect(qr.getByText("SCAN TO SUBMIT YOUR RESULT")).toBeVisible();
+  await expect(qr.locator("svg")).toBeVisible();
+  await qr.getByRole("button", { name: "Close" }).click();
+  await expect(qr).toHaveCount(0);
 
   // --- Submissions: void then restore ------------------------------------------
   await page.getByRole("button", { name: "Submissions" }).click();

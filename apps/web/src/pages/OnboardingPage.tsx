@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { invalidateMe, useMe } from "../lib/useMe";
 import { resetSocket } from "../lib/socket";
+import { safeNext } from "../lib/next";
 
 export function OnboardingPage() {
   const { me, loading } = useMe();
@@ -9,21 +10,23 @@ export function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeNext(params);
 
   useEffect(() => {
     if (loading) return;
     if (!me?.user) {
-      navigate("/auth");
+      navigate(`/auth?next=${encodeURIComponent(next)}`);
       return;
     }
     if (me.profile?.nickname) {
-      navigate("/play");
+      navigate(next);
       return;
     }
     setNickname((current) =>
       current === "" && me.user?.name ? me.user.name.replace(/[^A-Za-z0-9_-]/g, "") : current,
     );
-  }, [loading, me, navigate]);
+  }, [loading, me, navigate, next]);
 
   const submit = async () => {
     setBusy(true);
@@ -42,7 +45,7 @@ export function OnboardingPage() {
       }
       await invalidateMe();
       resetSocket();
-      navigate("/play");
+      navigate(next);
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 import { CASH_NET_SOFT_LIMIT } from "@uos-poker/shared";
 import { useMe } from "../lib/useMe";
 
@@ -14,9 +14,14 @@ const inputClass =
 
 export function SubmitResultPage() {
   const { me, loading } = useMe();
+  const location = useLocation();
+  // The QR code on the admin Sessions tab links here as
+  // /submit?session=<id>&code=<code>, so a scan only needs the result typed.
+  const [params] = useSearchParams();
+  const linkedSessionId = params.get("session");
   const [sessions, setSessions] = useState<OpenSession[] | null>(null);
   const [sessionId, setSessionId] = useState("");
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(() => (params.get("code") ?? "").toUpperCase().slice(0, 6));
   const [position, setPosition] = useState("");
   const [entrants, setEntrants] = useState("");
   const [buyIn, setBuyIn] = useState("");
@@ -30,9 +35,11 @@ export function SubmitResultPage() {
       .then((r) => r.json())
       .then((list: OpenSession[]) => {
         setSessions(list);
-        if (list.length > 0) setSessionId(list[0]!.id);
+        const linked = list.find((s) => s.id === linkedSessionId);
+        if (linked) setSessionId(linked.id);
+        else if (list.length > 0) setSessionId(list[0]!.id);
       });
-  }, []);
+  }, [linkedSessionId]);
 
   const session = sessions?.find((s) => s.id === sessionId);
   // Empty number inputs would otherwise go up as 0 and land a fake result.
@@ -96,16 +103,27 @@ export function SubmitResultPage() {
   if (loading) return null;
 
   if (!me?.user || !me.profile?.nickname) {
+    const next = encodeURIComponent(location.pathname + location.search);
     return (
       <section className="mx-auto max-w-md px-4 py-20 text-center">
         <h1 className="font-display text-3xl font-semibold tracking-[0.12em]">SUBMIT RESULT</h1>
         <p className="mt-4 text-muted">You need a verified account with a nickname to submit.</p>
-        <Link
-          to="/auth"
-          className="mt-4 inline-block rounded bg-ember-deep px-4 py-2 font-display text-sm text-white hover:bg-ember"
-        >
-          Sign in
-        </Link>
+        <div className="mt-4 flex justify-center gap-3">
+          <Link
+            to={me?.user ? `/onboarding?next=${next}` : `/auth?next=${next}`}
+            className="inline-block rounded bg-ember-deep px-4 py-2 font-display text-sm text-white hover:bg-ember"
+          >
+            {me?.user ? "Pick a nickname" : "Sign in"}
+          </Link>
+          {!me?.user && (
+            <Link
+              to={`/auth?mode=signup&next=${next}`}
+              className="inline-block rounded border border-steel px-4 py-2 font-display text-sm text-text hover:border-ember"
+            >
+              Create an account
+            </Link>
+          )}
+        </div>
       </section>
     );
   }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { authClient } from "../lib/auth";
 import { invalidateMe } from "../lib/useMe";
+import { safeNext } from "../lib/next";
 
 const inputClass =
   "w-full rounded border border-steel bg-bg-0 px-3 py-2 text-text outline-none focus:border-ember";
@@ -21,6 +22,12 @@ export function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const navigate = useNavigate();
+  // Carried through sign-up → email link → onboarding so a QR scan ends up
+  // back on the page it pointed at.
+  const next = safeNext(params);
+  const onboardingUrl = `${window.location.origin}/onboarding${
+    next === "/play" ? "" : `?next=${encodeURIComponent(next)}`
+  }`;
 
   useEffect(() => {
     void fetch("/api/config")
@@ -39,7 +46,7 @@ export function AuthPage() {
           email,
           password,
           name: nickname.trim(),
-          callbackURL: `${window.location.origin}/onboarding`,
+          callbackURL: onboardingUrl,
         });
         if (error) {
           setError(error.message ?? "Sign-up failed. Check the details and try again.");
@@ -57,7 +64,7 @@ export function AuthPage() {
           }
         } else {
           void invalidateMe();
-          navigate("/play");
+          navigate(next);
         }
       }
     } finally {
@@ -68,7 +75,7 @@ export function AuthPage() {
   const google = async () => {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: `${window.location.origin}/onboarding`,
+      callbackURL: onboardingUrl,
     });
   };
 

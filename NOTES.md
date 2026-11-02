@@ -5,6 +5,14 @@ properly" would look like.
 
 ## Thursday cash leaderboard review (tournament-integration)
 
+- Submission QR: admin Sessions → "Show QR" opens a full-screen QR linking to
+  `/submit?session=<id>&code=<code>` (form preselected, code prefilled). The
+  QR is generated client-side with `qrcode` — no third-party QR service. The
+  code is embedded in the link, so the QR is exactly as secret as reading the
+  code out; "New code" invalidates both (now asks to confirm).
+- `?next=` is carried through sign-in, sign-up → email verify → onboarding
+  (same-site paths only), so a new player who scans lands back on the form.
+
 - Code self-submission (`/submit`) is now only for rolling-season sessions
   (Thursday cash). Tournament-series sessions run from the kiosk and refuse
   code submissions, so a player can't use up their one entry slot before the

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMe } from "../lib/useMe";
 import { usePageMeta } from "../lib/usePageMeta";
+import { SessionQrOverlay } from "../components/SessionQr";
 
 /** The ops cockpit (§18): dense, fast, same language. Role-gated. */
 
@@ -86,6 +87,7 @@ function Sessions() {
   const [error, setError] = useState<string | null>(null);
   const [oneOffDate, setOneOffDate] = useState("");
   const [oneOffType, setOneOffType] = useState<"TOURNAMENT" | "CASH">("CASH");
+  const [qrFor, setQrFor] = useState<string | null>(null);
   const load = useCallback(() => void api<Row[]>("/api/admin/sessions").then(setRows), []);
   useEffect(load, [load]);
 
@@ -106,11 +108,31 @@ function Sessions() {
   return (
     <div>
       <p className="mb-3 max-w-2xl text-sm text-muted">
-        On a cash night, open this tab and read out tonight's code. Players submit their buy-in
-        and cash-out at <span className="font-mono text-text">/submit</span> between 17:00 and
-        23:59. Tournament nights run from Tournament management instead.
+        On a cash night, press <span className="text-text">Show QR</span> on tonight's card and
+        put it where players can scan it (or read out the code). Players submit their buy-in and
+        cash-out at <span className="font-mono text-text">/submit</span> between 17:00 and 23:59.
+        Tournament nights run from Tournament management instead.
       </p>
       {error && <p className="mb-3 text-sm text-ember">{error}</p>}
+      {(() => {
+        // Looked up from rows so a regenerated code updates the open QR.
+        const s = rows.find((r) => r.id === qrFor);
+        if (!s) return null;
+        const day = new Date(s.date).toLocaleDateString("en-GB", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          timeZone: "Europe/London",
+        });
+        return (
+          <SessionQrOverlay
+            sessionId={s.id}
+            code={s.code}
+            title={`${s.type === "CASH" ? "Cash game" : "Tournament"} · ${day}`}
+            onClose={() => setQrFor(null)}
+          />
+        );
+      })()}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((s) => {
           const isToday = londonDay(s.date) === today;
@@ -153,11 +175,16 @@ function Sessions() {
                     <span>{windowOpen ? "Submissions open" : "Opens 17:00 on the night"}</span>
                   </div>
                   <div className="mt-2 flex gap-2">
+                    <button className={isToday ? btnPrimary : btn} onClick={() => setQrFor(s.id)}>
+                      Show QR
+                    </button>
                     <button
                       className={btn}
-                      onClick={() =>
-                        run(api(`/api/admin/sessions/${s.id}/regenerate-code`, { method: "POST" }))
-                      }
+                      onClick={() => {
+                        if (window.confirm("Make a new code? Any shown QR or announced code stops working.")) {
+                          run(api(`/api/admin/sessions/${s.id}/regenerate-code`, { method: "POST" }));
+                        }
+                      }}
                     >
                       New code
                     </button>
